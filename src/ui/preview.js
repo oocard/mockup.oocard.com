@@ -49,18 +49,17 @@ export function servePreview(sessionId = null) {
         /* Holographic overlay system */
         .holo-container {
             position: relative;
+            overflow: hidden;
         }
         .holo-overlay {
             position: absolute;
             inset: 0;
             z-index: 5;
             pointer-events: none;
-            opacity: 0;
-            mix-blend-mode: color-dodge;
-            transition: opacity 0.4s ease;
+            visibility: hidden;
         }
         .holo-overlay.active {
-            opacity: var(--holo-opacity, 0.35);
+            visibility: visible;
         }
         .holo-texture {
             position: absolute;
@@ -68,47 +67,47 @@ export function servePreview(sessionId = null) {
             background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}');
             background-size: cover;
             background-position: center;
-            opacity: 0.3;
+            mix-blend-mode: color-dodge;
+            opacity: calc(var(--holo-intensity, 0.35) * 0.8);
         }
         .holo-rainbow {
             position: absolute;
             inset: -30%;
-            opacity: 0.25;
-            mix-blend-mode: hue;
+            mix-blend-mode: color-dodge;
+            opacity: calc(var(--holo-intensity, 0.35) * 0.7);
             background: linear-gradient(
                 var(--holo-angle, 135deg),
-                #ff7773 2%,
-                #ffed5f 13%,
-                #a8ff5f 24%,
-                #83fff7 39%,
-                #78dddf 49%,
-                #7894ff 59%,
-                #d17cf2 63%,
-                #ff7773 77%
+                #ff2d2d 2%,
+                #ffdc00 13%,
+                #5fff5f 24%,
+                #00f7ff 39%,
+                #00c3ff 49%,
+                #5f5fff 59%,
+                #d946ef 63%,
+                #ff2d2d 77%
             );
-            transition: --holo-angle 0.15s ease;
         }
         .holo-shimmer {
             position: absolute;
             inset: -30%;
-            opacity: 0.4;
             mix-blend-mode: overlay;
+            opacity: calc(var(--holo-intensity, 0.35) * 1.2);
             background: linear-gradient(
                 var(--holo-shimmer-angle, 315deg),
                 #131415 0%,
-                #8fa3a3 6%,
-                #a2a3a3 10%,
+                #c0c0c0 6%,
+                #e0e0e0 10%,
                 #141414 25%,
-                #8fa3a3 34%,
-                #a4a6a6 35%,
+                #c0c0c0 34%,
+                #e0e0e0 35%,
                 #252526 42%,
-                #a1a1a1 52%,
-                #7c7d7d 61%,
+                #d0d0d0 52%,
+                #a0a0a0 61%,
                 #131415 66%,
-                #a6a6a6 74%,
-                #a3a3a3 80%,
+                #e0e0e0 74%,
+                #c0c0c0 80%,
                 #131415 86%,
-                #a1a1a1 90%,
+                #d0d0d0 90%,
                 #131415 100%
             );
         }
@@ -117,6 +116,7 @@ export function servePreview(sessionId = null) {
             inset: 0;
             mix-blend-mode: overlay;
             filter: blur(30px);
+            opacity: calc(var(--holo-intensity, 0.35) * 1.5);
             background: radial-gradient(
                 circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%),
                 rgba(255,255,255,1) 0%,
@@ -829,9 +829,9 @@ export function servePreview(sessionId = null) {
             const showTexture = mode === 'fargo';
             [mainOverlay, modalOverlay].forEach(overlay => {
                 overlay.classList.add('active');
-                overlay.style.setProperty('--holo-opacity', holoIntensity);
+                overlay.style.setProperty('--holo-intensity', holoIntensity);
                 const tex = overlay.querySelector('.holo-texture');
-                tex.style.opacity = showTexture ? '0.3' : '0';
+                tex.style.display = showTexture ? '' : 'none';
             });
 
             // Trigger initial update from current camera position
@@ -872,7 +872,7 @@ export function servePreview(sessionId = null) {
             holoIntensity = parseInt(e.target.value) / 100;
             document.getElementById('holoIntensityValue').textContent = e.target.value + '%';
             [document.getElementById('mainHoloOverlay'), document.getElementById('modalHoloOverlay')].forEach(overlay => {
-                overlay.style.setProperty('--holo-opacity', holoIntensity);
+                overlay.style.setProperty('--holo-intensity', holoIntensity);
             });
         });
     </script>

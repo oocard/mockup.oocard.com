@@ -42,13 +42,13 @@ export function serveUI() {
         .text-balance { text-wrap: balance; }
         .text-pretty { text-wrap: pretty; }
         model-viewer { width: 100%; height: 100%; background-color: transparent; --poster-color: transparent; --progress-bar-color: #0077b6; }
-        .holo-container { position: relative; }
-        .holo-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; mix-blend-mode: color-dodge; transition: opacity 0.4s ease; }
-        .holo-overlay.active { opacity: var(--holo-opacity, 0.35); }
-        .holo-texture { position: absolute; inset: 0; background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}'); background-size: cover; background-position: center; opacity: 0.3; }
-        .holo-rainbow { position: absolute; inset: -30%; opacity: 0.25; mix-blend-mode: hue; background: linear-gradient(var(--holo-angle, 135deg), #ff7773 2%, #ffed5f 13%, #a8ff5f 24%, #83fff7 39%, #78dddf 49%, #7894ff 59%, #d17cf2 63%, #ff7773 77%); }
-        .holo-shimmer { position: absolute; inset: -30%; opacity: 0.4; mix-blend-mode: overlay; background: linear-gradient(var(--holo-shimmer-angle, 315deg), #131415 0%, #8fa3a3 6%, #a2a3a3 10%, #141414 25%, #8fa3a3 34%, #a4a6a6 35%, #252526 42%, #a1a1a1 52%, #7c7d7d 61%, #131415 66%, #a6a6a6 74%, #a3a3a3 80%, #131415 86%, #a1a1a1 90%, #131415 100%); }
-        .holo-spotlight { position: absolute; inset: 0; mix-blend-mode: overlay; filter: blur(30px); background: radial-gradient(circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%), rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 30%, rgba(255,255,255,0.1) 60%, rgba(255,255,255,0) 100%); }
+        .holo-container { position: relative; overflow: hidden; }
+        .holo-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; visibility: hidden; }
+        .holo-overlay.active { visibility: visible; }
+        .holo-texture { position: absolute; inset: 0; background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}'); background-size: cover; background-position: center; mix-blend-mode: color-dodge; opacity: calc(var(--holo-intensity, 0.35) * 0.8); }
+        .holo-rainbow { position: absolute; inset: -30%; mix-blend-mode: color-dodge; opacity: calc(var(--holo-intensity, 0.35) * 0.7); background: linear-gradient(var(--holo-angle, 135deg), #ff2d2d 2%, #ffdc00 13%, #5fff5f 24%, #00f7ff 39%, #00c3ff 49%, #5f5fff 59%, #d946ef 63%, #ff2d2d 77%); }
+        .holo-shimmer { position: absolute; inset: -30%; mix-blend-mode: overlay; opacity: calc(var(--holo-intensity, 0.35) * 1.2); background: linear-gradient(var(--holo-shimmer-angle, 315deg), #131415 0%, #c0c0c0 6%, #e0e0e0 10%, #141414 25%, #c0c0c0 34%, #e0e0e0 35%, #252526 42%, #d0d0d0 52%, #a0a0a0 61%, #131415 66%, #e0e0e0 74%, #c0c0c0 80%, #131415 86%, #d0d0d0 90%, #131415 100%); }
+        .holo-spotlight { position: absolute; inset: 0; mix-blend-mode: overlay; filter: blur(30px); opacity: calc(var(--holo-intensity, 0.35) * 1.5); background: radial-gradient(circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%), rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 30%, rgba(255,255,255,0.1) 60%, rgba(255,255,255,0) 100%); }
     </style>
 </head>
 <body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
@@ -393,6 +393,7 @@ export function serveUI() {
         let currentSessionId = null;
         let currentDownloadUrl = null;
         let resultHoloMode = 'off';
+        let resultHoloIntensity = 0.35;
 
         // Holographic overlay system
         function setResultHolo(mode) {
@@ -404,9 +405,13 @@ export function serveUI() {
                 intensityGroup.classList.add('hidden');
             } else {
                 overlay.classList.add('active');
+                overlay.style.setProperty('--holo-intensity', resultHoloIntensity);
                 intensityGroup.classList.remove('hidden');
                 const texture = overlay.querySelector('.holo-texture');
                 texture.style.display = (mode === 'fargo') ? '' : 'none';
+                // Trigger initial update
+                const viewer = document.getElementById('resultViewer');
+                updateResultHolo(viewer, overlay);
             }
         }
 
@@ -436,9 +441,9 @@ export function serveUI() {
 
         // Intensity slider
         document.getElementById('resultHoloIntensitySlider').addEventListener('input', (e) => {
-            const val = e.target.value;
-            document.getElementById('resultHoloIntensityValue').textContent = val + '%';
-            document.getElementById('resultHoloOverlay').style.setProperty('--holo-opacity', (val / 100).toFixed(2));
+            resultHoloIntensity = parseInt(e.target.value) / 100;
+            document.getElementById('resultHoloIntensityValue').textContent = e.target.value + '%';
+            document.getElementById('resultHoloOverlay').style.setProperty('--holo-intensity', resultHoloIntensity);
         });
         
         // File input change handlers
