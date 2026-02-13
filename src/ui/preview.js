@@ -258,9 +258,9 @@ export function servePreview(sessionId = null) {
                     <div id="holoIntensityGroup" class="mt-4 hidden">
                         <label class="mb-2 flex items-center justify-between text-sm">
                             <span class="text-ocean-950/70">Intensity</span>
-                            <span id="holoIntensityValue" class="tabular-nums font-medium text-ocean-950">35%</span>
+                            <span id="holoIntensityValue" class="tabular-nums font-medium text-ocean-950">50%</span>
                         </label>
-                        <input type="range" id="holoIntensitySlider" min="5" max="80" value="35" class="w-full accent-ocean-800">
+                        <input type="range" id="holoIntensitySlider" min="5" max="100" value="50" class="w-full accent-ocean-800">
                     </div>
                 </div>
 
@@ -718,25 +718,23 @@ export function servePreview(sessionId = null) {
 
         // ── Holographic Overlay System ──
         let holoMode = 'off';
-        let holoIntensity = 0.35;
-        let holoTextureObj = null;
+        let holoIntensity = 0.5;
         let origMatState = null;
-        const HOLO_DATA_URI = 'data:image/webp;base64,${HOLO_TEXTURE_B64}';
 
         function hslToRgb(h, s, l) {
             let r, g, b;
             if (s === 0) { r = g = b = l; }
             else {
-                const hue2rgb = (p, q, t) => {
-                    if (t < 0) t += 1;
-                    if (t > 1) t -= 1;
-                    if (t < 1/6) return p + (q - p) * 6 * t;
-                    if (t < 1/2) return q;
-                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                    return p;
-                };
                 const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
                 const p = 2 * l - q;
+                const hue2rgb = (pp, qq, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return pp + (qq - pp) * 6 * t;
+                    if (t < 1/2) return qq;
+                    if (t < 2/3) return pp + (qq - pp) * (2/3 - t) * 6;
+                    return pp;
+                };
                 r = hue2rgb(p, q, h + 1/3);
                 g = hue2rgb(p, q, h);
                 b = hue2rgb(p, q, h - 1/3);
@@ -744,44 +742,36 @@ export function servePreview(sessionId = null) {
             return [r, g, b];
         }
 
-        async function initHoloTexture(viewer) {
-            if (holoTextureObj) return;
-            try { holoTextureObj = await viewer.createTexture(HOLO_DATA_URI); }
-            catch (err) { /* fargo mode will fall back to color-only */ }
-        }
-
         function getViewers() {
             return [document.getElementById('cardViewer'), document.getElementById('modalViewer')].filter(Boolean);
         }
 
-        function applyToMaterials(viewer, fn) {
+        function eachMat(viewer, fn) {
             if (!viewer || !viewer.model) return;
             const mats = viewer.model.materials;
             if (mats[0]) fn(mats[0]);
             if (mats[1]) fn(mats[1]);
         }
 
-        async function setHoloMode(mode) {
+        function setHoloMode(mode) {
             holoMode = mode;
             const intensityGroup = document.getElementById('holoIntensityGroup');
             const viewers = getViewers();
 
             if (mode === 'off') {
                 intensityGroup.classList.add('hidden');
-                viewers.forEach(v => applyToMaterials(v, mat => {
-                    mat.emissiveFactor = [0, 0, 0];
+                viewers.forEach(v => eachMat(v, mat => {
+                    mat.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
                     if (origMatState) {
                         mat.pbrMetallicRoughness.setMetallicFactor(origMatState.metallic);
                         mat.pbrMetallicRoughness.setRoughnessFactor(origMatState.roughness);
                     }
-                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
                 }));
                 return;
             }
 
             intensityGroup.classList.remove('hidden');
 
-            // Save original material state once
             const mainViewer = viewers[0];
             if (!origMatState && mainViewer && mainViewer.model) {
                 const m = mainViewer.model.materials[0];
@@ -791,46 +781,41 @@ export function servePreview(sessionId = null) {
                 };
             }
 
-            // Make card metallic for shimmer
-            viewers.forEach(v => applyToMaterials(v, mat => {
-                mat.pbrMetallicRoughness.setMetallicFactor(0.4);
-                mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
-            }));
-
-            if (mode === 'fargo') {
-                if (mainViewer) await initHoloTexture(mainViewer);
-                if (holoTextureObj) {
-                    viewers.forEach(v => applyToMaterials(v, mat => {
-                        try { mat.emissiveTexture.setTexture(holoTextureObj); } catch(e) {}
-                    }));
-                }
-            } else {
-                viewers.forEach(v => applyToMaterials(v, mat => {
-                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
-                }));
-            }
-
-            viewers.forEach(v => updateHoloEmissive(v));
+            viewers.forEach(v => {
+                eachMat(v, mat => {
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.5);
+                    mat.pbrMetallicRoughness.setRoughnessFactor(0.25);
+                });
+                updateHoloColor(v);
+            });
         }
 
-        function updateHoloEmissive(viewer) {
+        function updateHoloColor(viewer) {
             if (!viewer || !viewer.model || holoMode === 'off') return;
+
             const orbit = viewer.getCameraOrbit();
             const theta = orbit.theta * (180 / Math.PI);
+            const phi = orbit.phi * (180 / Math.PI);
+
             const hue = (((theta * 2) % 360) + 360) % 360;
-            const [r, g, b] = hslToRgb(hue / 360, 0.9, 0.55);
+            const [hr, hg, hb] = hslToRgb(hue / 360, 1.0, 0.5);
+
             const i = holoIntensity;
-            applyToMaterials(viewer, mat => {
-                mat.emissiveFactor = [r * i * 2, g * i * 2, b * i * 2];
+            const tr = 1.0 - (1.0 - hr) * i * 0.7;
+            const tg = 1.0 - (1.0 - hg) * i * 0.7;
+            const tb = 1.0 - (1.0 - hb) * i * 0.7;
+
+            eachMat(viewer, mat => {
+                mat.pbrMetallicRoughness.setBaseColorFactor([tr, tg, tb, 1.0]);
             });
         }
 
         // Hook into camera changes
         document.getElementById('cardViewer')?.addEventListener('camera-change', (e) => {
-            updateHoloEmissive(e.target);
+            updateHoloColor(e.target);
         });
         document.getElementById('modalViewer')?.addEventListener('camera-change', (e) => {
-            updateHoloEmissive(e.target);
+            updateHoloColor(e.target);
         });
 
         // Re-apply holo when a model loads
@@ -845,7 +830,7 @@ export function servePreview(sessionId = null) {
         document.getElementById('holoIntensitySlider')?.addEventListener('input', (e) => {
             holoIntensity = parseInt(e.target.value) / 100;
             document.getElementById('holoIntensityValue').textContent = e.target.value + '%';
-            getViewers().forEach(v => updateHoloEmissive(v));
+            getViewers().forEach(v => updateHoloColor(v));
         });
     </script>
 </body>

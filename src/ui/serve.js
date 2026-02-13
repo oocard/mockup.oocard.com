@@ -290,9 +290,9 @@ export function serveUI() {
                             <div id="resultHoloIntensityGroup" class="mt-3 hidden">
                                 <label class="flex items-center justify-between text-sm">
                                     <span class="text-ocean-950/70">Intensity</span>
-                                    <span id="resultHoloIntensityValue" class="tabular-nums font-medium text-ocean-950">35%</span>
+                                    <span id="resultHoloIntensityValue" class="tabular-nums font-medium text-ocean-950">50%</span>
                                 </label>
-                                <input type="range" id="resultHoloIntensitySlider" min="5" max="80" value="35" class="mt-1 w-full accent-ocean-800">
+                                <input type="range" id="resultHoloIntensitySlider" min="5" max="100" value="50" class="mt-1 w-full accent-ocean-800">
                             </div>
                         </div>
                     </div>
@@ -380,25 +380,23 @@ export function serveUI() {
         let currentSessionId = null;
         let currentDownloadUrl = null;
         let resultHoloMode = 'off';
-        let resultHoloIntensity = 0.35;
-        let holoTextureObj = null;
+        let resultHoloIntensity = 0.5;
         let origMaterialState = null;
-        const HOLO_DATA_URI = 'data:image/webp;base64,${HOLO_TEXTURE_B64}';
 
         function hslToRgb(h, s, l) {
             let r, g, b;
             if (s === 0) { r = g = b = l; }
             else {
-                const hue2rgb = (p, q, t) => {
-                    if (t < 0) t += 1;
-                    if (t > 1) t -= 1;
-                    if (t < 1/6) return p + (q - p) * 6 * t;
-                    if (t < 1/2) return q;
-                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                    return p;
-                };
                 const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
                 const p = 2 * l - q;
+                const hue2rgb = (pp, qq, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return pp + (qq - pp) * 6 * t;
+                    if (t < 1/2) return qq;
+                    if (t < 2/3) return pp + (qq - pp) * (2/3 - t) * 6;
+                    return pp;
+                };
                 r = hue2rgb(p, q, h + 1/3);
                 g = hue2rgb(p, q, h);
                 b = hue2rgb(p, q, h - 1/3);
@@ -406,82 +404,69 @@ export function serveUI() {
             return [r, g, b];
         }
 
-        async function initHoloTexture(viewer) {
-            if (holoTextureObj) return;
-            try { holoTextureObj = await viewer.createTexture(HOLO_DATA_URI); }
-            catch (err) { /* texture creation failed, fargo mode will fall back to color-only */ }
+        function eachMat(viewer, fn) {
+            if (!viewer || !viewer.model) return;
+            const mats = viewer.model.materials;
+            if (mats[0]) fn(mats[0]);
+            if (mats[1]) fn(mats[1]);
         }
 
-        async function setResultHolo(mode) {
+        function setResultHolo(mode) {
             resultHoloMode = mode;
             const viewer = document.getElementById('resultViewer');
             const intensityGroup = document.getElementById('resultHoloIntensityGroup');
 
-            if (!viewer || !viewer.model) {
-                if (mode !== 'off') intensityGroup.classList.remove('hidden');
-                else intensityGroup.classList.add('hidden');
-                return;
-            }
-
-            const frontMat = viewer.model.materials[0];
-            const backMat = viewer.model.materials[1];
-
             if (mode === 'off') {
                 intensityGroup.classList.add('hidden');
-                [frontMat, backMat].forEach(mat => {
-                    mat.emissiveFactor = [0, 0, 0];
+                eachMat(viewer, mat => {
+                    mat.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
                     if (origMaterialState) {
                         mat.pbrMetallicRoughness.setMetallicFactor(origMaterialState.metallic);
                         mat.pbrMetallicRoughness.setRoughnessFactor(origMaterialState.roughness);
                     }
-                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
                 });
                 return;
             }
 
             intensityGroup.classList.remove('hidden');
 
-            // Save original material state
-            if (!origMaterialState) {
-                origMaterialState = {
-                    metallic: frontMat.pbrMetallicRoughness.metallicFactor,
-                    roughness: frontMat.pbrMetallicRoughness.roughnessFactor
-                };
-            }
-
-            // Make card slightly metallic for holographic shimmer
-            [frontMat, backMat].forEach(mat => {
-                mat.pbrMetallicRoughness.setMetallicFactor(0.4);
-                mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
-            });
-
-            if (mode === 'fargo') {
-                await initHoloTexture(viewer);
-                if (holoTextureObj) {
-                    [frontMat, backMat].forEach(mat => {
-                        try { mat.emissiveTexture.setTexture(holoTextureObj); } catch(e) {}
-                    });
+            if (viewer && viewer.model) {
+                const m0 = viewer.model.materials[0];
+                if (!origMaterialState && m0) {
+                    origMaterialState = {
+                        metallic: m0.pbrMetallicRoughness.metallicFactor,
+                        roughness: m0.pbrMetallicRoughness.roughnessFactor
+                    };
                 }
-            } else {
-                [frontMat, backMat].forEach(mat => {
-                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
+                eachMat(viewer, mat => {
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.5);
+                    mat.pbrMetallicRoughness.setRoughnessFactor(0.25);
                 });
+                updateHoloColor(viewer);
             }
-
-            updateHoloEmissive(viewer);
         }
 
-        function updateHoloEmissive(viewer) {
+        function updateHoloColor(viewer) {
             if (!viewer || !viewer.model || resultHoloMode === 'off') return;
+
             const orbit = viewer.getCameraOrbit();
             const theta = orbit.theta * (180 / Math.PI);
+            const phi = orbit.phi * (180 / Math.PI);
+
+            // Map camera angle to hue - multiply for faster cycling
             const hue = (((theta * 2) % 360) + 360) % 360;
-            const [r, g, b] = hslToRgb(hue / 360, 0.9, 0.55);
+            const [hr, hg, hb] = hslToRgb(hue / 360, 1.0, 0.5);
+
             const i = resultHoloIntensity;
-            const frontMat = viewer.model.materials[0];
-            const backMat = viewer.model.materials[1];
-            [frontMat, backMat].forEach(mat => {
-                mat.emissiveFactor = [r * i * 2, g * i * 2, b * i * 2];
+
+            // Blend between white (no tint) and rainbow color
+            // At full intensity, the tint is strong; at zero, no tint
+            const tr = 1.0 - (1.0 - hr) * i * 0.7;
+            const tg = 1.0 - (1.0 - hg) * i * 0.7;
+            const tb = 1.0 - (1.0 - hb) * i * 0.7;
+
+            eachMat(viewer, mat => {
+                mat.pbrMetallicRoughness.setBaseColorFactor([tr, tg, tb, 1.0]);
             });
         }
 
@@ -489,7 +474,7 @@ export function serveUI() {
         customElements.whenDefined('model-viewer').then(() => {
             const viewer = document.getElementById('resultViewer');
             if (viewer) {
-                viewer.addEventListener('camera-change', () => updateHoloEmissive(viewer));
+                viewer.addEventListener('camera-change', () => updateHoloColor(viewer));
                 viewer.addEventListener('load', () => {
                     if (resultHoloMode !== 'off') setResultHolo(resultHoloMode);
                 });
@@ -500,7 +485,7 @@ export function serveUI() {
         document.getElementById('resultHoloIntensitySlider').addEventListener('input', (e) => {
             resultHoloIntensity = parseInt(e.target.value) / 100;
             document.getElementById('resultHoloIntensityValue').textContent = e.target.value + '%';
-            updateHoloEmissive(document.getElementById('resultViewer'));
+            updateHoloColor(document.getElementById('resultViewer'));
         });
         
         // File input change handlers
@@ -675,7 +660,6 @@ export function serveUI() {
             setResultHolo('off');
             document.querySelector('input[name="resultHoloMode"][value="off"]').checked = true;
             origMaterialState = null;
-            holoTextureObj = null;
             const resultViewer = document.getElementById('resultViewer');
             if (resultViewer) resultViewer.removeAttribute('src');
         });
