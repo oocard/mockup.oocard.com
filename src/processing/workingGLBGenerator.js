@@ -1,4 +1,5 @@
 import { generateCopyrightPNG, imageBufferToDataURL } from './imageProcessor.js';
+import { EMISSIVE_PLACEHOLDER_B64 } from '../assets/guillochePattern.js';
 
 /**
  * Working GLB generator that creates valid glTF 2.0 files
@@ -30,25 +31,30 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
       const copyrightPNG = generateCopyrightPNG(copyrightOptions.text, 512, 48);
       edgeImageData = copyrightPNG;
     }
+
+    // 1x1 white PNG placeholder for emissive texture slot (enables runtime holographic overlay)
+    const emissiveImageData = base64ToArrayBuffer(EMISSIVE_PLACEHOLDER_B64);
     
     // Create geometry data and get vertex counts
     const geometryData = createCardGeometry();
     const geometryBuffer = geometryData.buffer;
     const { frontVertexCount, backVertexCount, frontIndexCount, backIndexCount, edgeVertexCount, edgeIndexCount } = geometryData;
     
-    // Calculate buffer sizes for both images
+    // Calculate buffer sizes for all images
     const geometrySize = geometryBuffer.byteLength;
     const frontImageSize = frontImageData.byteLength;
     const backImageSize = backImageData.byteLength;
     const edgeImageSize = edgeImageData ? edgeImageData.byteLength : 0;
-    
+    const emissiveImageSize = emissiveImageData.byteLength;
+
     // Align to 4-byte boundaries
     const geometryAligned = alignTo4(geometrySize);
     const frontImageAligned = alignTo4(frontImageSize);
     const backImageAligned = alignTo4(backImageSize);
     const edgeImageAligned = edgeImageData ? alignTo4(edgeImageSize) : 0;
-    
-    const totalBinarySize = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned;
+    const emissiveImageAligned = alignTo4(emissiveImageSize);
+
+    const totalBinarySize = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned + emissiveImageAligned;
     
     // Create glTF JSON
     const gltf = {
@@ -100,112 +106,94 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
           ]
         }
       ],
-      "materials": [
-        {
-          "name": "Front Material",
-          "pbrMetallicRoughness": {
-            "baseColorTexture": {
-              "index": 0
+      "materials": (() => {
+        // Emissive texture index: after front(0), back(1), and optionally edge(2)
+        const emissiveTexIdx = edgeImageData ? 3 : 2;
+        return [
+          {
+            "name": "Front Material",
+            "pbrMetallicRoughness": {
+              "baseColorTexture": { "index": 0 },
+              "metallicFactor": 0.0,
+              "roughnessFactor": 0.9
             },
-            "metallicFactor": 0.0,
-            "roughnessFactor": 0.9
+            "emissiveFactor": [0.0, 0.0, 0.0],
+            "emissiveTexture": { "index": emissiveTexIdx },
+            "doubleSided": true
           },
-          "doubleSided": true
-        },
-        {
-          "name": "Back Material",
-          "pbrMetallicRoughness": {
-            "baseColorTexture": {
-              "index": 1
+          {
+            "name": "Back Material",
+            "pbrMetallicRoughness": {
+              "baseColorTexture": { "index": 1 },
+              "metallicFactor": 0.0,
+              "roughnessFactor": 0.9
             },
-            "metallicFactor": 0.0,
-            "roughnessFactor": 0.9
+            "emissiveFactor": [0.0, 0.0, 0.0],
+            "emissiveTexture": { "index": emissiveTexIdx },
+            "doubleSided": true
           },
-          "doubleSided": true
-        },
-        edgeImageData ? {
-          "name": "Edge Material",
-          "pbrMetallicRoughness": {
-            "baseColorTexture": {
-              "index": 2
+          edgeImageData ? {
+            "name": "Edge Material",
+            "pbrMetallicRoughness": {
+              "baseColorTexture": { "index": 2 },
+              "metallicFactor": 0.0,
+              "roughnessFactor": 0.8
             },
-            "metallicFactor": 0.0,
-            "roughnessFactor": 0.8
-          },
-          "doubleSided": true
-        } : {
-          "name": "Edge Material",
-          "pbrMetallicRoughness": {
-            "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
-            "metallicFactor": 0.0,
-            "roughnessFactor": 0.8
-          },
-          "doubleSided": true
-        }
-      ],
+            "doubleSided": true
+          } : {
+            "name": "Edge Material",
+            "pbrMetallicRoughness": {
+              "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+              "metallicFactor": 0.0,
+              "roughnessFactor": 0.8
+            },
+            "doubleSided": true
+          }
+        ];
+      })(),
       "samplers": edgeImageData ? [
-        { "magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071 },  // Front/back: clamp to edge
-        { "magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 33071 }   // Edge: repeat horizontally, clamp vertically
+        { "magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071 },
+        { "magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 33071 }
       ] : [
-        { "magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071 }   // Clamp to edge
+        { "magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071 }
       ],
-      "textures": edgeImageData ? [
-        { "source": 0, "sampler": 0 },
-        { "source": 1, "sampler": 0 },
-        { "source": 2, "sampler": 1 }
-      ] : [
-        { "source": 0, "sampler": 0 },
-        { "source": 1, "sampler": 0 }
-      ],
-      "images": edgeImageData ? [
-        { "bufferView": 1, "mimeType": "image/png" },
-        { "bufferView": 2, "mimeType": "image/png" },
-        { "bufferView": 3, "mimeType": "image/png" }
-      ] : [
-        { "bufferView": 1, "mimeType": "image/png" },
-        { "bufferView": 2, "mimeType": "image/png" }
-      ],
+      "textures": (() => {
+        const t = [
+          { "source": 0, "sampler": 0 },
+          { "source": 1, "sampler": 0 }
+        ];
+        if (edgeImageData) t.push({ "source": 2, "sampler": 1 });
+        // Emissive placeholder texture (source index = after other images)
+        const emissiveSrcIdx = edgeImageData ? 3 : 2;
+        t.push({ "source": emissiveSrcIdx, "sampler": 0 });
+        return t;
+      })(),
+      "images": (() => {
+        // bufferView indices: 0=geometry, 1=front, 2=back, 3=edge(opt), N=emissive
+        const imgs = [
+          { "bufferView": 1, "mimeType": "image/png" },
+          { "bufferView": 2, "mimeType": "image/png" }
+        ];
+        if (edgeImageData) imgs.push({ "bufferView": 3, "mimeType": "image/png" });
+        const emissiveBvIdx = edgeImageData ? 4 : 3;
+        imgs.push({ "bufferView": emissiveBvIdx, "mimeType": "image/png" });
+        return imgs;
+      })(),
       "accessors": createAccessors(geometryBuffer, frontVertexCount, frontIndexCount, backVertexCount, backIndexCount, edgeVertexCount, edgeIndexCount),
-      "bufferViews": edgeImageData ? [
-        {
-          "buffer": 0,
-          "byteOffset": 0,
-          "byteLength": geometrySize,
-          "target": 34962
-        },
-        {
-          "buffer": 0,
-          "byteOffset": geometryAligned,
-          "byteLength": frontImageSize
-        },
-        {
-          "buffer": 0,
-          "byteOffset": geometryAligned + frontImageAligned,
-          "byteLength": backImageSize
-        },
-        {
-          "buffer": 0,
-          "byteOffset": geometryAligned + frontImageAligned + backImageAligned,
-          "byteLength": edgeImageSize
+      "bufferViews": (() => {
+        const bvs = [
+          { "buffer": 0, "byteOffset": 0, "byteLength": geometrySize, "target": 34962 },
+          { "buffer": 0, "byteOffset": geometryAligned, "byteLength": frontImageSize },
+          { "buffer": 0, "byteOffset": geometryAligned + frontImageAligned, "byteLength": backImageSize }
+        ];
+        let emissiveOffset = geometryAligned + frontImageAligned + backImageAligned;
+        if (edgeImageData) {
+          bvs.push({ "buffer": 0, "byteOffset": emissiveOffset, "byteLength": edgeImageSize });
+          emissiveOffset += edgeImageAligned;
         }
-      ] : [
-        {
-          "buffer": 0,
-          "byteOffset": 0,
-          "byteLength": geometrySize,
-          "target": 34962
-        },
-        {
-          "buffer": 0,
-          "byteOffset": geometryAligned,
-          "byteLength": frontImageSize
-        },
-        {
-          "buffer": 0,
-          "byteOffset": geometryAligned + frontImageAligned,
-          "byteLength": backImageSize
-        }
-      ],
+        bvs.push({ "buffer": 0, "byteOffset": emissiveOffset, "byteLength": emissiveImageSize });
+        return bvs;
+      })(),
       "buffers": [
         {
           "byteLength": totalBinarySize
@@ -242,6 +230,10 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
       offset = geometryAligned + frontImageAligned + backImageAligned;
       binaryView.set(new Uint8Array(edgeImageData), offset);
     }
+
+    // Add emissive placeholder image
+    const emissiveOffset = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned;
+    binaryView.set(new Uint8Array(emissiveImageData), emissiveOffset);
     
     // Create GLB file
     const glbSize = 12 + 8 + jsonPadded.byteLength + 8 + totalBinarySize;

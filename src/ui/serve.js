@@ -1,6 +1,6 @@
 // Note: fs imports don't work in Cloudflare Workers
 // HTML is embedded directly in the function
-import { HOLO_TEXTURE_B64 } from '../assets/holoTexture.js';
+import { GUILLOCHE_SVG } from '../assets/guillochePattern.js';
 
 /**
  * Serve the HTML UI
@@ -279,8 +279,8 @@ export function serveUI() {
                                     <span class="text-sm text-ocean-950">Off</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="resultHoloMode" value="fargo" class="accent-ocean-800" onchange="setResultHolo('fargo')">
-                                    <span class="text-sm text-ocean-950">Fargo HoloSentria</span>
+                                    <input type="radio" name="resultHoloMode" value="guilloche" class="accent-ocean-800" onchange="setResultHolo('guilloche')">
+                                    <span class="text-sm text-ocean-950">Guilloche</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="radio" name="resultHoloMode" value="rainbow" class="accent-ocean-800" onchange="setResultHolo('rainbow')">
@@ -382,6 +382,11 @@ export function serveUI() {
         let resultHoloMode = 'off';
         let resultHoloIntensity = 0.5;
         let origMaterialState = null;
+        let guillocheTexture = null;
+        let placeholderTexture = null;
+
+        // Guilloche SVG source (white strokes on transparent, for emissive texture)
+        const GUILLOCHE_SVG_SRC = \`${GUILLOCHE_SVG}\`;
 
         function hslToRgb(h, s, l) {
             let r, g, b;
@@ -411,7 +416,48 @@ export function serveUI() {
             if (mats[1]) fn(mats[1]);
         }
 
-        function setResultHolo(mode) {
+        // Render Guilloche SVG to a PNG data URI (white on black, card proportions)
+        function renderGuillocheToDataUri() {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                // Card aspect ratio: 85.6 / 53.98 ≈ 1.586
+                canvas.width = 1024;
+                canvas.height = 646;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const img = new Image();
+                const svgBlob = new Blob([GUILLOCHE_SVG_SRC], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(svgBlob);
+                img.onload = () => {
+                    // Center the 200x200 pattern scaled to fill the shorter dimension
+                    const scale = Math.min(canvas.width, canvas.height) / 200;
+                    const w = 200 * scale;
+                    const h = 200 * scale;
+                    const x = (canvas.width - w) / 2;
+                    const y = (canvas.height - h) / 2;
+                    ctx.drawImage(img, x, y, w, h);
+                    URL.revokeObjectURL(url);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(null);
+                };
+                img.src = url;
+            });
+        }
+
+        async function initGuillocheTexture(viewer) {
+            if (guillocheTexture) return;
+            const dataUri = await renderGuillocheToDataUri();
+            if (dataUri) {
+                guillocheTexture = await viewer.createTexture(dataUri);
+            }
+        }
+
+        async function setResultHolo(mode) {
             resultHoloMode = mode;
             const viewer = document.getElementById('resultViewer');
             const intensityGroup = document.getElementById('resultHoloIntensityGroup');
@@ -419,10 +465,15 @@ export function serveUI() {
             if (mode === 'off') {
                 intensityGroup.classList.add('hidden');
                 eachMat(viewer, mat => {
+                    mat.emissiveFactor = [0, 0, 0];
                     mat.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
                     if (origMaterialState) {
                         mat.pbrMetallicRoughness.setMetallicFactor(origMaterialState.metallic);
                         mat.pbrMetallicRoughness.setRoughnessFactor(origMaterialState.roughness);
+                    }
+                    // Restore placeholder texture
+                    if (placeholderTexture) {
+                        try { mat.emissiveTexture.setTexture(placeholderTexture); } catch(e) {}
                     }
                 });
                 return;
@@ -430,20 +481,39 @@ export function serveUI() {
 
             intensityGroup.classList.remove('hidden');
 
-            if (viewer && viewer.model) {
-                const m0 = viewer.model.materials[0];
-                if (!origMaterialState && m0) {
-                    origMaterialState = {
-                        metallic: m0.pbrMetallicRoughness.metallicFactor,
-                        roughness: m0.pbrMetallicRoughness.roughnessFactor
-                    };
-                }
-                eachMat(viewer, mat => {
-                    mat.pbrMetallicRoughness.setMetallicFactor(0.5);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.25);
-                });
-                updateHoloColor(viewer);
+            if (!viewer || !viewer.model) return;
+
+            const m0 = viewer.model.materials[0];
+            if (!origMaterialState && m0) {
+                origMaterialState = {
+                    metallic: m0.pbrMetallicRoughness.metallicFactor,
+                    roughness: m0.pbrMetallicRoughness.roughnessFactor
+                };
             }
+
+            // Make metallic for shimmer
+            eachMat(viewer, mat => {
+                mat.pbrMetallicRoughness.setMetallicFactor(0.5);
+                mat.pbrMetallicRoughness.setRoughnessFactor(0.25);
+            });
+
+            if (mode === 'guilloche') {
+                await initGuillocheTexture(viewer);
+                if (guillocheTexture) {
+                    eachMat(viewer, mat => {
+                        try { mat.emissiveTexture.setTexture(guillocheTexture); } catch(e) {}
+                    });
+                }
+            } else {
+                // Rainbow mode - restore placeholder (1x1 white = uniform glow)
+                if (placeholderTexture) {
+                    eachMat(viewer, mat => {
+                        try { mat.emissiveTexture.setTexture(placeholderTexture); } catch(e) {}
+                    });
+                }
+            }
+
+            updateHoloColor(viewer);
         }
 
         function updateHoloColor(viewer) {
@@ -451,32 +521,39 @@ export function serveUI() {
 
             const orbit = viewer.getCameraOrbit();
             const theta = orbit.theta * (180 / Math.PI);
-            const phi = orbit.phi * (180 / Math.PI);
 
-            // Map camera angle to hue - multiply for faster cycling
             const hue = (((theta * 2) % 360) + 360) % 360;
-            const [hr, hg, hb] = hslToRgb(hue / 360, 1.0, 0.5);
-
+            const [r, g, b] = hslToRgb(hue / 360, 1.0, 0.5);
             const i = resultHoloIntensity;
 
-            // Blend between white (no tint) and rainbow color
-            // At full intensity, the tint is strong; at zero, no tint
-            const tr = 1.0 - (1.0 - hr) * i * 0.7;
-            const tg = 1.0 - (1.0 - hg) * i * 0.7;
-            const tb = 1.0 - (1.0 - hb) * i * 0.7;
+            // emissiveFactor drives the rainbow color through the emissive texture
+            eachMat(viewer, mat => {
+                mat.emissiveFactor = [r * i * 2.5, g * i * 2.5, b * i * 2.5];
+            });
 
+            // Also tint baseColor slightly for richer effect
+            const tr = 1.0 - (1.0 - r) * i * 0.3;
+            const tg = 1.0 - (1.0 - g) * i * 0.3;
+            const tb = 1.0 - (1.0 - b) * i * 0.3;
             eachMat(viewer, mat => {
                 mat.pbrMetallicRoughness.setBaseColorFactor([tr, tg, tb, 1.0]);
             });
         }
 
-        // Attach camera-change listener
+        // Attach camera-change and load listeners
         customElements.whenDefined('model-viewer').then(() => {
             const viewer = document.getElementById('resultViewer');
             if (viewer) {
                 viewer.addEventListener('camera-change', () => updateHoloColor(viewer));
-                viewer.addEventListener('load', () => {
-                    if (resultHoloMode !== 'off') setResultHolo(resultHoloMode);
+                viewer.addEventListener('load', async () => {
+                    // Capture the placeholder texture from the GLB
+                    if (!placeholderTexture && viewer.model) {
+                        const m0 = viewer.model.materials[0];
+                        if (m0 && m0.emissiveTexture) {
+                            placeholderTexture = m0.emissiveTexture.texture;
+                        }
+                    }
+                    if (resultHoloMode !== 'off') await setResultHolo(resultHoloMode);
                 });
             }
         });
