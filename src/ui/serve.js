@@ -1,5 +1,6 @@
 // Note: fs imports don't work in Cloudflare Workers
 // HTML is embedded directly in the function
+import { HOLO_TEXTURE_B64 } from '../assets/holoTexture.js';
 
 /**
  * Serve the HTML UI
@@ -12,6 +13,7 @@ export function serveUI() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Card Generator - OOCard</title>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -39,6 +41,14 @@ export function serveUI() {
     <style>
         .text-balance { text-wrap: balance; }
         .text-pretty { text-wrap: pretty; }
+        model-viewer { width: 100%; height: 100%; background-color: transparent; --poster-color: transparent; --progress-bar-color: #0077b6; }
+        .holo-container { position: relative; }
+        .holo-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; mix-blend-mode: color-dodge; transition: opacity 0.4s ease; }
+        .holo-overlay.active { opacity: var(--holo-opacity, 0.35); }
+        .holo-texture { position: absolute; inset: 0; background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}'); background-size: cover; background-position: center; opacity: 0.3; }
+        .holo-rainbow { position: absolute; inset: -30%; opacity: 0.25; mix-blend-mode: hue; background: linear-gradient(var(--holo-angle, 135deg), #ff7773 2%, #ffed5f 13%, #a8ff5f 24%, #83fff7 39%, #78dddf 49%, #7894ff 59%, #d17cf2 63%, #ff7773 77%); }
+        .holo-shimmer { position: absolute; inset: -30%; opacity: 0.4; mix-blend-mode: overlay; background: linear-gradient(var(--holo-shimmer-angle, 315deg), #131415 0%, #8fa3a3 6%, #a2a3a3 10%, #141414 25%, #8fa3a3 34%, #a4a6a6 35%, #252526 42%, #a1a1a1 52%, #7c7d7d 61%, #131415 66%, #a6a6a6 74%, #a3a3a3 80%, #131415 86%, #a1a1a1 90%, #131415 100%); }
+        .holo-spotlight { position: absolute; inset: 0; mix-blend-mode: overlay; filter: blur(30px); background: radial-gradient(circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%), rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 30%, rgba(255,255,255,0.1) 60%, rgba(255,255,255,0) 100%); }
     </style>
 </head>
 <body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
@@ -134,32 +144,6 @@ export function serveUI() {
                                 <p class="mt-1 text-xs text-ocean-950/60">PNG format required</p>
                             </div>
 
-                            <!-- Overlay (Optional) -->
-                            <div>
-                                <label for="overlay" class="mb-1.5 block text-sm font-medium text-ocean-950">
-                                    Overlay <span class="text-ocean-950/50">(optional)</span>
-                                </label>
-                                <div class="relative">
-                                    <input 
-                                        type="file" 
-                                        id="overlay" 
-                                        name="overlay" 
-                                        class="peer sr-only" 
-                                        accept=".svg,image/svg+xml"
-                                    >
-                                    <label 
-                                        for="overlay" 
-                                        id="overlayButton"
-                                        class="flex cursor-pointer items-center justify-between rounded-md border border-ocean-300 bg-white px-4 py-2.5 text-sm text-ocean-950/60 hover:border-ocean-600 hover:bg-ocean-100 peer-focus:border-ocean-800 peer-focus:ring-1 peer-focus:ring-ocean-800"
-                                    >
-                                        <span>Choose SVG overlay</span>
-                                        <svg class="size-5 text-ocean-600" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                                        </svg>
-                                    </label>
-                                </div>
-                                <p class="mt-1 text-xs text-ocean-950/60">SVG format for additional effects</p>
-                            </div>
                         </div>
                     </div>
 
@@ -231,46 +215,97 @@ export function serveUI() {
                     </div>
 
                     <!-- Download Section -->
-                    <div id="downloadSection" class="hidden rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
-                        <div class="flex items-start justify-between gap-4 flex-wrap">
-                            <div>
-                                <h3 class="font-medium text-ocean-950">Your 3D Card is Ready</h3>
-                                <div class="mt-2 flex flex-wrap gap-4 text-sm">
-                                    <div>
-                                        <span class="text-ocean-950/60">Format:</span>
-                                        <span class="ml-1 font-medium text-ocean-950">GLB</span>
+                    <div id="downloadSection" class="hidden space-y-4">
+                        <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                            <div class="flex items-start justify-between gap-4 flex-wrap">
+                                <div>
+                                    <h3 class="font-medium text-ocean-950">Your 3D Card is Ready</h3>
+                                    <div class="mt-2 flex flex-wrap gap-4 text-sm">
+                                        <div>
+                                            <span class="text-ocean-950/60">Format:</span>
+                                            <span class="ml-1 font-medium text-ocean-950">GLB</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-ocean-950/60">Size:</span>
+                                            <span id="fileSize" class="ml-1 tabular-nums font-medium text-ocean-950">-</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-ocean-950/60">Time:</span>
+                                            <span id="processTime" class="ml-1 tabular-nums font-medium text-ocean-950">-</span>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span class="text-ocean-950/60">Size:</span>
-                                        <span id="fileSize" class="ml-1 tabular-nums font-medium text-ocean-950">-</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-ocean-950/60">Time:</span>
-                                        <span id="processTime" class="ml-1 tabular-nums font-medium text-ocean-950">-</span>
-                                    </div>
+                                    <p class="mt-2 text-xs text-ocean-950/60">Session: <code id="sessionIdDisplay" class="rounded bg-ocean-100 px-1.5 py-0.5">-</code></p>
                                 </div>
-                                <p class="mt-2 text-xs text-ocean-950/60">Session: <code id="sessionIdDisplay" class="rounded bg-ocean-100 px-1.5 py-0.5">-</code></p>
+                                <div class="flex gap-2">
+                                    <button
+                                        id="previewBtn"
+                                        class="inline-flex items-center gap-2 rounded-md border border-ocean-300 bg-white px-4 py-2 text-sm font-medium text-ocean-950 hover:bg-ocean-100 focus:outline-none focus:ring-2 focus:ring-ocean-800 focus:ring-offset-2"
+                                    >
+                                        <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+                                        </svg>
+                                        Full Preview
+                                    </button>
+                                    <button
+                                        id="downloadBtn"
+                                        class="inline-flex items-center gap-2 rounded-md bg-ocean-800 px-4 py-2 text-sm font-medium text-white hover:bg-ocean-950 focus:outline-none focus:ring-2 focus:ring-ocean-800 focus:ring-offset-2"
+                                    >
+                                        <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                        </svg>
+                                        Download
+                                    </button>
+                                </div>
                             </div>
-                            <div class="flex gap-2">
-                                <button 
-                                    id="previewBtn"
-                                    class="inline-flex items-center gap-2 rounded-md border border-ocean-300 bg-white px-4 py-2 text-sm font-medium text-ocean-950 hover:bg-ocean-100 focus:outline-none focus:ring-2 focus:ring-ocean-800 focus:ring-offset-2"
-                                >
-                                    <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
-                                    </svg>
-                                    Preview
-                                </button>
-                                <button 
-                                    id="downloadBtn"
-                                    class="inline-flex items-center gap-2 rounded-md bg-ocean-800 px-4 py-2 text-sm font-medium text-white hover:bg-ocean-950 focus:outline-none focus:ring-2 focus:ring-ocean-800 focus:ring-offset-2"
-                                >
-                                    <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                    </svg>
-                                    Download
-                                </button>
+                        </div>
+
+                        <!-- Inline 3D Viewer -->
+                        <div class="rounded-lg border border-ocean-300 bg-white shadow-sm overflow-hidden">
+                            <div class="holo-container relative h-[400px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                                <model-viewer
+                                    id="resultViewer"
+                                    camera-controls
+                                    touch-action="pan-y"
+                                    auto-rotate
+                                    auto-rotate-delay="500"
+                                    rotation-per-second="30deg"
+                                    shadow-intensity="1"
+                                    exposure="1"
+                                    style="width: 100%; height: 100%;">
+                                </model-viewer>
+                                <div id="resultHoloOverlay" class="holo-overlay">
+                                    <div class="holo-texture"></div>
+                                    <div class="holo-rainbow"></div>
+                                    <div class="holo-shimmer"></div>
+                                    <div class="holo-spotlight"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Holographic Overlay Controls -->
+                        <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                            <h3 class="mb-4 text-sm font-medium text-ocean-950">Holographic Overlay</h3>
+                            <div class="flex flex-wrap gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="resultHoloMode" value="off" checked class="accent-ocean-800" onchange="setResultHolo('off')">
+                                    <span class="text-sm text-ocean-950">Off</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="resultHoloMode" value="fargo" class="accent-ocean-800" onchange="setResultHolo('fargo')">
+                                    <span class="text-sm text-ocean-950">Fargo HoloSentria</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="resultHoloMode" value="rainbow" class="accent-ocean-800" onchange="setResultHolo('rainbow')">
+                                    <span class="text-sm text-ocean-950">Rainbow Foil</span>
+                                </label>
+                            </div>
+                            <div id="resultHoloIntensityGroup" class="mt-3 hidden">
+                                <label class="flex items-center justify-between text-sm">
+                                    <span class="text-ocean-950/70">Intensity</span>
+                                    <span id="resultHoloIntensityValue" class="tabular-nums font-medium text-ocean-950">35%</span>
+                                </label>
+                                <input type="range" id="resultHoloIntensitySlider" min="5" max="80" value="35" class="mt-1 w-full accent-ocean-800">
                             </div>
                         </div>
                     </div>
@@ -340,10 +375,8 @@ export function serveUI() {
         const uploadForm = document.getElementById('uploadForm');
         const frontImage = document.getElementById('frontImage');
         const backImage = document.getElementById('backImage');
-        const overlay = document.getElementById('overlay');
         const frontButton = document.getElementById('frontButton');
         const backButton = document.getElementById('backButton');
-        const overlayButton = document.getElementById('overlayButton');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const progressContainer = document.getElementById('progressContainer');
@@ -359,6 +392,54 @@ export function serveUI() {
         
         let currentSessionId = null;
         let currentDownloadUrl = null;
+        let resultHoloMode = 'off';
+
+        // Holographic overlay system
+        function setResultHolo(mode) {
+            resultHoloMode = mode;
+            const overlay = document.getElementById('resultHoloOverlay');
+            const intensityGroup = document.getElementById('resultHoloIntensityGroup');
+            if (mode === 'off') {
+                overlay.classList.remove('active');
+                intensityGroup.classList.add('hidden');
+            } else {
+                overlay.classList.add('active');
+                intensityGroup.classList.remove('hidden');
+                const texture = overlay.querySelector('.holo-texture');
+                texture.style.display = (mode === 'fargo') ? '' : 'none';
+            }
+        }
+
+        function updateResultHolo(viewer, overlay) {
+            if (!viewer || resultHoloMode === 'off') return;
+            const orbit = viewer.getCameraOrbit();
+            const theta = orbit.theta * (180 / Math.PI);
+            const phi = orbit.phi * (180 / Math.PI);
+            const angle = ((theta % 360) + 360) % 360;
+            const shimmerAngle = ((angle + 180) % 360);
+            overlay.style.setProperty('--holo-angle', angle + 'deg');
+            overlay.style.setProperty('--holo-shimmer-angle', shimmerAngle + 'deg');
+            const spotX = 50 + Math.sin(theta) * 30;
+            const spotY = 50 - Math.cos(phi) * 30;
+            overlay.style.setProperty('--holo-spot-x', spotX + '%');
+            overlay.style.setProperty('--holo-spot-y', spotY + '%');
+        }
+
+        // Attach camera-change listener when model-viewer is ready
+        customElements.whenDefined('model-viewer').then(() => {
+            const viewer = document.getElementById('resultViewer');
+            const overlay = document.getElementById('resultHoloOverlay');
+            if (viewer) {
+                viewer.addEventListener('camera-change', () => updateResultHolo(viewer, overlay));
+            }
+        });
+
+        // Intensity slider
+        document.getElementById('resultHoloIntensitySlider').addEventListener('input', (e) => {
+            const val = e.target.value;
+            document.getElementById('resultHoloIntensityValue').textContent = val + '%';
+            document.getElementById('resultHoloOverlay').style.setProperty('--holo-opacity', (val / 100).toFixed(2));
+        });
         
         // File input change handlers
         function updateFileButton(input, button, defaultText) {
@@ -376,8 +457,6 @@ export function serveUI() {
 
         frontImage.addEventListener('change', () => updateFileButton(frontImage, frontButton, 'Choose front image'));
         backImage.addEventListener('change', () => updateFileButton(backImage, backButton, 'Choose back image'));
-        overlay.addEventListener('change', () => updateFileButton(overlay, overlayButton, 'Choose SVG overlay'));
-        
         // Form submission
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -453,6 +532,12 @@ export function serveUI() {
                     // Show download section
                     downloadSection.classList.remove('hidden');
                     sessionIdDisplay.textContent = currentSessionId;
+
+                    // Load GLB into inline viewer
+                    const resultViewer = document.getElementById('resultViewer');
+                    if (resultViewer) {
+                        resultViewer.src = currentDownloadUrl;
+                    }
                     
                     // Update file info
                     if (result.fileSize) {
@@ -517,7 +602,6 @@ export function serveUI() {
             uploadForm.reset();
             updateFileButton(frontImage, frontButton, 'Choose front image');
             updateFileButton(backImage, backButton, 'Choose back image');
-            updateFileButton(overlay, overlayButton, 'Choose SVG overlay');
             progressContainer.classList.add('hidden');
             downloadSection.classList.add('hidden');
             hideStatus();
@@ -525,6 +609,11 @@ export function serveUI() {
             currentDownloadUrl = null;
             // Reset copyright text
             document.getElementById('copyrightTextContainer').classList.add('hidden');
+            // Reset holographic overlay
+            setResultHolo('off');
+            document.querySelector('input[name="resultHoloMode"][value="off"]').checked = true;
+            const resultViewer = document.getElementById('resultViewer');
+            if (resultViewer) resultViewer.removeAttribute('src');
         });
         
         // Helper functions

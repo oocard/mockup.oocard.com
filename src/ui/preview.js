@@ -1,3 +1,5 @@
+import { HOLO_TEXTURE_B64 } from '../assets/holoTexture.js';
+
 /**
  * Serve the card preview page with Google model-viewer
  * @param {string} sessionId - Optional session ID for loading a specific card
@@ -42,6 +44,86 @@ export function servePreview(sessionId = null) {
             background-color: transparent;
             --poster-color: transparent;
             --progress-bar-color: #0077b6;
+        }
+
+        /* Holographic overlay system */
+        .holo-container {
+            position: relative;
+        }
+        .holo-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            mix-blend-mode: color-dodge;
+            transition: opacity 0.4s ease;
+        }
+        .holo-overlay.active {
+            opacity: var(--holo-opacity, 0.35);
+        }
+        .holo-texture {
+            position: absolute;
+            inset: 0;
+            background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.3;
+        }
+        .holo-rainbow {
+            position: absolute;
+            inset: -30%;
+            opacity: 0.25;
+            mix-blend-mode: hue;
+            background: linear-gradient(
+                var(--holo-angle, 135deg),
+                #ff7773 2%,
+                #ffed5f 13%,
+                #a8ff5f 24%,
+                #83fff7 39%,
+                #78dddf 49%,
+                #7894ff 59%,
+                #d17cf2 63%,
+                #ff7773 77%
+            );
+            transition: --holo-angle 0.15s ease;
+        }
+        .holo-shimmer {
+            position: absolute;
+            inset: -30%;
+            opacity: 0.4;
+            mix-blend-mode: overlay;
+            background: linear-gradient(
+                var(--holo-shimmer-angle, 315deg),
+                #131415 0%,
+                #8fa3a3 6%,
+                #a2a3a3 10%,
+                #141414 25%,
+                #8fa3a3 34%,
+                #a4a6a6 35%,
+                #252526 42%,
+                #a1a1a1 52%,
+                #7c7d7d 61%,
+                #131415 66%,
+                #a6a6a6 74%,
+                #a3a3a3 80%,
+                #131415 86%,
+                #a1a1a1 90%,
+                #131415 100%
+            );
+        }
+        .holo-spotlight {
+            position: absolute;
+            inset: 0;
+            mix-blend-mode: overlay;
+            filter: blur(30px);
+            background: radial-gradient(
+                circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%),
+                rgba(255,255,255,1) 0%,
+                rgba(255,255,255,0.5) 30%,
+                rgba(255,255,255,0.1) 60%,
+                rgba(255,255,255,0) 100%
+            );
         }
     </style>
 </head>
@@ -125,19 +207,25 @@ export function servePreview(sessionId = null) {
                         </svg>
                     </button>
                 </div>
-                <div class="relative h-[60vh] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                <div class="holo-container relative h-[60vh] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
                     <div id="modalLoading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
                         <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
-                    <model-viewer 
+                    <model-viewer
                         id="modalViewer"
-                        camera-controls 
+                        camera-controls
                         touch-action="pan-y"
                         auto-rotate
                         shadow-intensity="1"
                         exposure="1"
                         style="width: 100%; height: 100%;">
                     </model-viewer>
+                    <div id="modalHoloOverlay" class="holo-overlay">
+                        <div class="holo-texture"></div>
+                        <div class="holo-rainbow"></div>
+                        <div class="holo-shimmer"></div>
+                        <div class="holo-spotlight"></div>
+                    </div>
                 </div>
                 <div class="flex items-center justify-between border-t border-ocean-200 px-4 py-3">
                     <p id="modalInfo" class="text-xs text-ocean-950/60"></p>
@@ -153,13 +241,13 @@ export function servePreview(sessionId = null) {
         <div id="viewerSection" class="hidden space-y-6">
             <!-- 3D Viewer -->
             <div class="overflow-hidden rounded-lg border border-ocean-300 bg-white shadow-sm">
-                <div class="relative h-[500px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                <div class="holo-container relative h-[500px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
                     <div id="loadingOverlay" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
                         <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
-                    <model-viewer 
+                    <model-viewer
                         id="cardViewer"
-                        camera-controls 
+                        camera-controls
                         touch-action="pan-y"
                         auto-rotate
                         auto-rotate-delay="1000"
@@ -170,6 +258,12 @@ export function servePreview(sessionId = null) {
                         tone-mapping="neutral"
                         environment-image="neutral">
                     </model-viewer>
+                    <div id="mainHoloOverlay" class="holo-overlay">
+                        <div class="holo-texture"></div>
+                        <div class="holo-rainbow"></div>
+                        <div class="holo-shimmer"></div>
+                        <div class="holo-spotlight"></div>
+                    </div>
                 </div>
             </div>
 
@@ -222,6 +316,41 @@ export function servePreview(sessionId = null) {
                             </label>
                             <input type="range" id="shadowSlider" min="0" max="2" value="1" step="0.1" class="w-full accent-ocean-800">
                         </div>
+                    </div>
+                </div>
+
+                <!-- Holographic Overlay -->
+                <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                    <h3 class="mb-4 text-sm font-medium text-ocean-950">Holographic Overlay</h3>
+                    <div class="space-y-3">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="holoMode" value="off" checked class="accent-ocean-800" onchange="setHoloMode('off')">
+                            <div>
+                                <span class="text-sm font-medium text-ocean-950">Off</span>
+                                <p class="text-xs text-ocean-950/60">No holographic effect</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="holoMode" value="fargo" class="accent-ocean-800" onchange="setHoloMode('fargo')">
+                            <div>
+                                <span class="text-sm font-medium text-ocean-950">Fargo HoloSentria</span>
+                                <p class="text-xs text-ocean-950/60">Security hologram with globe pattern</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="holoMode" value="rainbow" class="accent-ocean-800" onchange="setHoloMode('rainbow')">
+                            <div>
+                                <span class="text-sm font-medium text-ocean-950">Rainbow Foil</span>
+                                <p class="text-xs text-ocean-950/60">Iridescent rainbow shimmer</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div id="holoIntensityGroup" class="mt-4 hidden">
+                        <label class="mb-2 flex items-center justify-between text-sm">
+                            <span class="text-ocean-950/70">Intensity</span>
+                            <span id="holoIntensityValue" class="tabular-nums font-medium text-ocean-950">35%</span>
+                        </label>
+                        <input type="range" id="holoIntensitySlider" min="5" max="80" value="35" class="w-full accent-ocean-800">
                     </div>
                 </div>
 
@@ -675,6 +804,76 @@ export function servePreview(sessionId = null) {
             if (e.target.id === 'glbModal') {
                 closeModal();
             }
+        });
+
+        // ── Holographic Overlay System ──
+        let holoMode = 'off';
+        let holoIntensity = 0.35;
+
+        function setHoloMode(mode) {
+            holoMode = mode;
+            const mainOverlay = document.getElementById('mainHoloOverlay');
+            const modalOverlay = document.getElementById('modalHoloOverlay');
+            const intensityGroup = document.getElementById('holoIntensityGroup');
+
+            if (mode === 'off') {
+                mainOverlay.classList.remove('active');
+                modalOverlay.classList.remove('active');
+                intensityGroup.classList.add('hidden');
+                return;
+            }
+
+            intensityGroup.classList.remove('hidden');
+
+            // Toggle texture layer visibility based on mode
+            const showTexture = mode === 'fargo';
+            [mainOverlay, modalOverlay].forEach(overlay => {
+                overlay.classList.add('active');
+                overlay.style.setProperty('--holo-opacity', holoIntensity);
+                const tex = overlay.querySelector('.holo-texture');
+                tex.style.opacity = showTexture ? '0.3' : '0';
+            });
+
+            // Trigger initial update from current camera position
+            updateHoloFromViewer(modelViewer, mainOverlay);
+        }
+
+        function updateHoloFromViewer(viewer, overlay) {
+            if (!viewer || holoMode === 'off') return;
+
+            const orbit = viewer.getCameraOrbit();
+            const theta = orbit.theta * (180 / Math.PI);
+            const phi = orbit.phi * (180 / Math.PI);
+
+            const angle = ((theta % 360) + 360) % 360;
+            const shimmerAngle = ((angle + 180) % 360);
+
+            overlay.style.setProperty('--holo-angle', angle + 'deg');
+            overlay.style.setProperty('--holo-shimmer-angle', shimmerAngle + 'deg');
+
+            const spotX = 50 + Math.sin(theta) * 30;
+            const spotY = 50 - Math.cos(phi) * 30;
+            overlay.style.setProperty('--holo-spot-x', spotX + '%');
+            overlay.style.setProperty('--holo-spot-y', spotY + '%');
+        }
+
+        // Hook into camera changes on main viewer
+        document.getElementById('cardViewer')?.addEventListener('camera-change', (e) => {
+            updateHoloFromViewer(e.target, document.getElementById('mainHoloOverlay'));
+        });
+
+        // Hook into camera changes on modal viewer
+        document.getElementById('modalViewer')?.addEventListener('camera-change', (e) => {
+            updateHoloFromViewer(e.target, document.getElementById('modalHoloOverlay'));
+        });
+
+        // Intensity slider
+        document.getElementById('holoIntensitySlider')?.addEventListener('input', (e) => {
+            holoIntensity = parseInt(e.target.value) / 100;
+            document.getElementById('holoIntensityValue').textContent = e.target.value + '%';
+            [document.getElementById('mainHoloOverlay'), document.getElementById('modalHoloOverlay')].forEach(overlay => {
+                overlay.style.setProperty('--holo-opacity', holoIntensity);
+            });
         });
     </script>
 </body>
