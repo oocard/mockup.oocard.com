@@ -42,13 +42,6 @@ export function serveUI() {
         .text-balance { text-wrap: balance; }
         .text-pretty { text-wrap: pretty; }
         model-viewer { width: 100%; height: 100%; background-color: transparent; --poster-color: transparent; --progress-bar-color: #0077b6; }
-        .holo-container { position: relative; overflow: hidden; }
-        .holo-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; visibility: hidden; }
-        .holo-overlay.active { visibility: visible; }
-        .holo-texture { position: absolute; inset: 0; background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}'); background-size: cover; background-position: center; mix-blend-mode: color-dodge; opacity: calc(var(--holo-intensity, 0.35) * 0.8); }
-        .holo-rainbow { position: absolute; inset: -30%; mix-blend-mode: color-dodge; opacity: calc(var(--holo-intensity, 0.35) * 0.7); background: linear-gradient(var(--holo-angle, 135deg), #ff2d2d 2%, #ffdc00 13%, #5fff5f 24%, #00f7ff 39%, #00c3ff 49%, #5f5fff 59%, #d946ef 63%, #ff2d2d 77%); }
-        .holo-shimmer { position: absolute; inset: -30%; mix-blend-mode: overlay; opacity: calc(var(--holo-intensity, 0.35) * 1.2); background: linear-gradient(var(--holo-shimmer-angle, 315deg), #131415 0%, #c0c0c0 6%, #e0e0e0 10%, #141414 25%, #c0c0c0 34%, #e0e0e0 35%, #252526 42%, #d0d0d0 52%, #a0a0a0 61%, #131415 66%, #e0e0e0 74%, #c0c0c0 80%, #131415 86%, #d0d0d0 90%, #131415 100%); }
-        .holo-spotlight { position: absolute; inset: 0; mix-blend-mode: overlay; filter: blur(30px); opacity: calc(var(--holo-intensity, 0.35) * 1.5); background: radial-gradient(circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%), rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 30%, rgba(255,255,255,0.1) 60%, rgba(255,255,255,0) 100%); }
     </style>
 </head>
 <body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
@@ -262,7 +255,7 @@ export function serveUI() {
 
                         <!-- Inline 3D Viewer -->
                         <div class="rounded-lg border border-ocean-300 bg-white shadow-sm overflow-hidden">
-                            <div class="holo-container relative h-[400px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                            <div class="relative h-[400px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
                                 <model-viewer
                                     id="resultViewer"
                                     camera-controls
@@ -274,12 +267,6 @@ export function serveUI() {
                                     exposure="1"
                                     style="width: 100%; height: 100%;">
                                 </model-viewer>
-                                <div id="resultHoloOverlay" class="holo-overlay">
-                                    <div class="holo-texture"></div>
-                                    <div class="holo-rainbow"></div>
-                                    <div class="holo-shimmer"></div>
-                                    <div class="holo-spotlight"></div>
-                                </div>
                             </div>
                         </div>
 
@@ -394,48 +381,118 @@ export function serveUI() {
         let currentDownloadUrl = null;
         let resultHoloMode = 'off';
         let resultHoloIntensity = 0.35;
+        let holoTextureObj = null;
+        let origMaterialState = null;
+        const HOLO_DATA_URI = 'data:image/webp;base64,${HOLO_TEXTURE_B64}';
 
-        // Holographic overlay system
-        function setResultHolo(mode) {
-            resultHoloMode = mode;
-            const overlay = document.getElementById('resultHoloOverlay');
-            const intensityGroup = document.getElementById('resultHoloIntensityGroup');
-            if (mode === 'off') {
-                overlay.classList.remove('active');
-                intensityGroup.classList.add('hidden');
-            } else {
-                overlay.classList.add('active');
-                overlay.style.setProperty('--holo-intensity', resultHoloIntensity);
-                intensityGroup.classList.remove('hidden');
-                const texture = overlay.querySelector('.holo-texture');
-                texture.style.display = (mode === 'fargo') ? '' : 'none';
-                // Trigger initial update
-                const viewer = document.getElementById('resultViewer');
-                updateResultHolo(viewer, overlay);
+        function hslToRgb(h, s, l) {
+            let r, g, b;
+            if (s === 0) { r = g = b = l; }
+            else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
             }
+            return [r, g, b];
         }
 
-        function updateResultHolo(viewer, overlay) {
-            if (!viewer || resultHoloMode === 'off') return;
+        async function initHoloTexture(viewer) {
+            if (holoTextureObj) return;
+            try { holoTextureObj = await viewer.createTexture(HOLO_DATA_URI); }
+            catch (err) { /* texture creation failed, fargo mode will fall back to color-only */ }
+        }
+
+        async function setResultHolo(mode) {
+            resultHoloMode = mode;
+            const viewer = document.getElementById('resultViewer');
+            const intensityGroup = document.getElementById('resultHoloIntensityGroup');
+
+            if (!viewer || !viewer.model) {
+                if (mode !== 'off') intensityGroup.classList.remove('hidden');
+                else intensityGroup.classList.add('hidden');
+                return;
+            }
+
+            const frontMat = viewer.model.materials[0];
+            const backMat = viewer.model.materials[1];
+
+            if (mode === 'off') {
+                intensityGroup.classList.add('hidden');
+                [frontMat, backMat].forEach(mat => {
+                    mat.emissiveFactor = [0, 0, 0];
+                    if (origMaterialState) {
+                        mat.pbrMetallicRoughness.setMetallicFactor(origMaterialState.metallic);
+                        mat.pbrMetallicRoughness.setRoughnessFactor(origMaterialState.roughness);
+                    }
+                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
+                });
+                return;
+            }
+
+            intensityGroup.classList.remove('hidden');
+
+            // Save original material state
+            if (!origMaterialState) {
+                origMaterialState = {
+                    metallic: frontMat.pbrMetallicRoughness.metallicFactor,
+                    roughness: frontMat.pbrMetallicRoughness.roughnessFactor
+                };
+            }
+
+            // Make card slightly metallic for holographic shimmer
+            [frontMat, backMat].forEach(mat => {
+                mat.pbrMetallicRoughness.setMetallicFactor(0.4);
+                mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
+            });
+
+            if (mode === 'fargo') {
+                await initHoloTexture(viewer);
+                if (holoTextureObj) {
+                    [frontMat, backMat].forEach(mat => {
+                        try { mat.emissiveTexture.setTexture(holoTextureObj); } catch(e) {}
+                    });
+                }
+            } else {
+                [frontMat, backMat].forEach(mat => {
+                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
+                });
+            }
+
+            updateHoloEmissive(viewer);
+        }
+
+        function updateHoloEmissive(viewer) {
+            if (!viewer || !viewer.model || resultHoloMode === 'off') return;
             const orbit = viewer.getCameraOrbit();
             const theta = orbit.theta * (180 / Math.PI);
-            const phi = orbit.phi * (180 / Math.PI);
-            const angle = ((theta % 360) + 360) % 360;
-            const shimmerAngle = ((angle + 180) % 360);
-            overlay.style.setProperty('--holo-angle', angle + 'deg');
-            overlay.style.setProperty('--holo-shimmer-angle', shimmerAngle + 'deg');
-            const spotX = 50 + Math.sin(theta) * 30;
-            const spotY = 50 - Math.cos(phi) * 30;
-            overlay.style.setProperty('--holo-spot-x', spotX + '%');
-            overlay.style.setProperty('--holo-spot-y', spotY + '%');
+            const hue = (((theta * 2) % 360) + 360) % 360;
+            const [r, g, b] = hslToRgb(hue / 360, 0.9, 0.55);
+            const i = resultHoloIntensity;
+            const frontMat = viewer.model.materials[0];
+            const backMat = viewer.model.materials[1];
+            [frontMat, backMat].forEach(mat => {
+                mat.emissiveFactor = [r * i * 2, g * i * 2, b * i * 2];
+            });
         }
 
-        // Attach camera-change listener when model-viewer is ready
+        // Attach camera-change listener
         customElements.whenDefined('model-viewer').then(() => {
             const viewer = document.getElementById('resultViewer');
-            const overlay = document.getElementById('resultHoloOverlay');
             if (viewer) {
-                viewer.addEventListener('camera-change', () => updateResultHolo(viewer, overlay));
+                viewer.addEventListener('camera-change', () => updateHoloEmissive(viewer));
+                viewer.addEventListener('load', () => {
+                    if (resultHoloMode !== 'off') setResultHolo(resultHoloMode);
+                });
             }
         });
 
@@ -443,7 +500,7 @@ export function serveUI() {
         document.getElementById('resultHoloIntensitySlider').addEventListener('input', (e) => {
             resultHoloIntensity = parseInt(e.target.value) / 100;
             document.getElementById('resultHoloIntensityValue').textContent = e.target.value + '%';
-            document.getElementById('resultHoloOverlay').style.setProperty('--holo-intensity', resultHoloIntensity);
+            updateHoloEmissive(document.getElementById('resultViewer'));
         });
         
         // File input change handlers
@@ -617,6 +674,8 @@ export function serveUI() {
             // Reset holographic overlay
             setResultHolo('off');
             document.querySelector('input[name="resultHoloMode"][value="off"]').checked = true;
+            origMaterialState = null;
+            holoTextureObj = null;
             const resultViewer = document.getElementById('resultViewer');
             if (resultViewer) resultViewer.removeAttribute('src');
         });

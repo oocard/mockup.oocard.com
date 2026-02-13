@@ -46,85 +46,7 @@ export function servePreview(sessionId = null) {
             --progress-bar-color: #0077b6;
         }
 
-        /* Holographic overlay system */
-        .holo-container {
-            position: relative;
-            overflow: hidden;
-        }
-        .holo-overlay {
-            position: absolute;
-            inset: 0;
-            z-index: 5;
-            pointer-events: none;
-            visibility: hidden;
-        }
-        .holo-overlay.active {
-            visibility: visible;
-        }
-        .holo-texture {
-            position: absolute;
-            inset: 0;
-            background-image: url('data:image/webp;base64,${HOLO_TEXTURE_B64}');
-            background-size: cover;
-            background-position: center;
-            mix-blend-mode: color-dodge;
-            opacity: calc(var(--holo-intensity, 0.35) * 0.8);
-        }
-        .holo-rainbow {
-            position: absolute;
-            inset: -30%;
-            mix-blend-mode: color-dodge;
-            opacity: calc(var(--holo-intensity, 0.35) * 0.7);
-            background: linear-gradient(
-                var(--holo-angle, 135deg),
-                #ff2d2d 2%,
-                #ffdc00 13%,
-                #5fff5f 24%,
-                #00f7ff 39%,
-                #00c3ff 49%,
-                #5f5fff 59%,
-                #d946ef 63%,
-                #ff2d2d 77%
-            );
-        }
-        .holo-shimmer {
-            position: absolute;
-            inset: -30%;
-            mix-blend-mode: overlay;
-            opacity: calc(var(--holo-intensity, 0.35) * 1.2);
-            background: linear-gradient(
-                var(--holo-shimmer-angle, 315deg),
-                #131415 0%,
-                #c0c0c0 6%,
-                #e0e0e0 10%,
-                #141414 25%,
-                #c0c0c0 34%,
-                #e0e0e0 35%,
-                #252526 42%,
-                #d0d0d0 52%,
-                #a0a0a0 61%,
-                #131415 66%,
-                #e0e0e0 74%,
-                #c0c0c0 80%,
-                #131415 86%,
-                #d0d0d0 90%,
-                #131415 100%
-            );
-        }
-        .holo-spotlight {
-            position: absolute;
-            inset: 0;
-            mix-blend-mode: overlay;
-            filter: blur(30px);
-            opacity: calc(var(--holo-intensity, 0.35) * 1.5);
-            background: radial-gradient(
-                circle at var(--holo-spot-x, 50%) var(--holo-spot-y, 50%),
-                rgba(255,255,255,1) 0%,
-                rgba(255,255,255,0.5) 30%,
-                rgba(255,255,255,0.1) 60%,
-                rgba(255,255,255,0) 100%
-            );
-        }
+        /* no additional CSS needed - holographic effect uses model-viewer Materials API */
     </style>
 </head>
 <body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
@@ -207,7 +129,7 @@ export function servePreview(sessionId = null) {
                         </svg>
                     </button>
                 </div>
-                <div class="holo-container relative h-[60vh] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                <div class="relative h-[60vh] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
                     <div id="modalLoading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
                         <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
@@ -220,12 +142,6 @@ export function servePreview(sessionId = null) {
                         exposure="1"
                         style="width: 100%; height: 100%;">
                     </model-viewer>
-                    <div id="modalHoloOverlay" class="holo-overlay">
-                        <div class="holo-texture"></div>
-                        <div class="holo-rainbow"></div>
-                        <div class="holo-shimmer"></div>
-                        <div class="holo-spotlight"></div>
-                    </div>
                 </div>
                 <div class="flex items-center justify-between border-t border-ocean-200 px-4 py-3">
                     <p id="modalInfo" class="text-xs text-ocean-950/60"></p>
@@ -241,7 +157,7 @@ export function servePreview(sessionId = null) {
         <div id="viewerSection" class="hidden space-y-6">
             <!-- 3D Viewer -->
             <div class="overflow-hidden rounded-lg border border-ocean-300 bg-white shadow-sm">
-                <div class="holo-container relative h-[500px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                <div class="relative h-[500px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
                     <div id="loadingOverlay" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
                         <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
@@ -258,12 +174,6 @@ export function servePreview(sessionId = null) {
                         tone-mapping="neutral"
                         environment-image="neutral">
                     </model-viewer>
-                    <div id="mainHoloOverlay" class="holo-overlay">
-                        <div class="holo-texture"></div>
-                        <div class="holo-rainbow"></div>
-                        <div class="holo-shimmer"></div>
-                        <div class="holo-spotlight"></div>
-                    </div>
                 </div>
             </div>
 
@@ -809,71 +719,133 @@ export function servePreview(sessionId = null) {
         // ── Holographic Overlay System ──
         let holoMode = 'off';
         let holoIntensity = 0.35;
+        let holoTextureObj = null;
+        let origMatState = null;
+        const HOLO_DATA_URI = 'data:image/webp;base64,${HOLO_TEXTURE_B64}';
 
-        function setHoloMode(mode) {
+        function hslToRgb(h, s, l) {
+            let r, g, b;
+            if (s === 0) { r = g = b = l; }
+            else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+            return [r, g, b];
+        }
+
+        async function initHoloTexture(viewer) {
+            if (holoTextureObj) return;
+            try { holoTextureObj = await viewer.createTexture(HOLO_DATA_URI); }
+            catch (err) { /* fargo mode will fall back to color-only */ }
+        }
+
+        function getViewers() {
+            return [document.getElementById('cardViewer'), document.getElementById('modalViewer')].filter(Boolean);
+        }
+
+        function applyToMaterials(viewer, fn) {
+            if (!viewer || !viewer.model) return;
+            const mats = viewer.model.materials;
+            if (mats[0]) fn(mats[0]);
+            if (mats[1]) fn(mats[1]);
+        }
+
+        async function setHoloMode(mode) {
             holoMode = mode;
-            const mainOverlay = document.getElementById('mainHoloOverlay');
-            const modalOverlay = document.getElementById('modalHoloOverlay');
             const intensityGroup = document.getElementById('holoIntensityGroup');
+            const viewers = getViewers();
 
             if (mode === 'off') {
-                mainOverlay.classList.remove('active');
-                modalOverlay.classList.remove('active');
                 intensityGroup.classList.add('hidden');
+                viewers.forEach(v => applyToMaterials(v, mat => {
+                    mat.emissiveFactor = [0, 0, 0];
+                    if (origMatState) {
+                        mat.pbrMetallicRoughness.setMetallicFactor(origMatState.metallic);
+                        mat.pbrMetallicRoughness.setRoughnessFactor(origMatState.roughness);
+                    }
+                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
+                }));
                 return;
             }
 
             intensityGroup.classList.remove('hidden');
 
-            // Toggle texture layer visibility based on mode
-            const showTexture = mode === 'fargo';
-            [mainOverlay, modalOverlay].forEach(overlay => {
-                overlay.classList.add('active');
-                overlay.style.setProperty('--holo-intensity', holoIntensity);
-                const tex = overlay.querySelector('.holo-texture');
-                tex.style.display = showTexture ? '' : 'none';
-            });
+            // Save original material state once
+            const mainViewer = viewers[0];
+            if (!origMatState && mainViewer && mainViewer.model) {
+                const m = mainViewer.model.materials[0];
+                origMatState = {
+                    metallic: m.pbrMetallicRoughness.metallicFactor,
+                    roughness: m.pbrMetallicRoughness.roughnessFactor
+                };
+            }
 
-            // Trigger initial update from current camera position
-            updateHoloFromViewer(modelViewer, mainOverlay);
+            // Make card metallic for shimmer
+            viewers.forEach(v => applyToMaterials(v, mat => {
+                mat.pbrMetallicRoughness.setMetallicFactor(0.4);
+                mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
+            }));
+
+            if (mode === 'fargo') {
+                if (mainViewer) await initHoloTexture(mainViewer);
+                if (holoTextureObj) {
+                    viewers.forEach(v => applyToMaterials(v, mat => {
+                        try { mat.emissiveTexture.setTexture(holoTextureObj); } catch(e) {}
+                    }));
+                }
+            } else {
+                viewers.forEach(v => applyToMaterials(v, mat => {
+                    try { mat.emissiveTexture.setTexture(null); } catch(e) {}
+                }));
+            }
+
+            viewers.forEach(v => updateHoloEmissive(v));
         }
 
-        function updateHoloFromViewer(viewer, overlay) {
-            if (!viewer || holoMode === 'off') return;
-
+        function updateHoloEmissive(viewer) {
+            if (!viewer || !viewer.model || holoMode === 'off') return;
             const orbit = viewer.getCameraOrbit();
             const theta = orbit.theta * (180 / Math.PI);
-            const phi = orbit.phi * (180 / Math.PI);
-
-            const angle = ((theta % 360) + 360) % 360;
-            const shimmerAngle = ((angle + 180) % 360);
-
-            overlay.style.setProperty('--holo-angle', angle + 'deg');
-            overlay.style.setProperty('--holo-shimmer-angle', shimmerAngle + 'deg');
-
-            const spotX = 50 + Math.sin(theta) * 30;
-            const spotY = 50 - Math.cos(phi) * 30;
-            overlay.style.setProperty('--holo-spot-x', spotX + '%');
-            overlay.style.setProperty('--holo-spot-y', spotY + '%');
+            const hue = (((theta * 2) % 360) + 360) % 360;
+            const [r, g, b] = hslToRgb(hue / 360, 0.9, 0.55);
+            const i = holoIntensity;
+            applyToMaterials(viewer, mat => {
+                mat.emissiveFactor = [r * i * 2, g * i * 2, b * i * 2];
+            });
         }
 
-        // Hook into camera changes on main viewer
+        // Hook into camera changes
         document.getElementById('cardViewer')?.addEventListener('camera-change', (e) => {
-            updateHoloFromViewer(e.target, document.getElementById('mainHoloOverlay'));
+            updateHoloEmissive(e.target);
+        });
+        document.getElementById('modalViewer')?.addEventListener('camera-change', (e) => {
+            updateHoloEmissive(e.target);
         });
 
-        // Hook into camera changes on modal viewer
-        document.getElementById('modalViewer')?.addEventListener('camera-change', (e) => {
-            updateHoloFromViewer(e.target, document.getElementById('modalHoloOverlay'));
+        // Re-apply holo when a model loads
+        document.getElementById('cardViewer')?.addEventListener('load', () => {
+            if (holoMode !== 'off') setHoloMode(holoMode);
+        });
+        document.getElementById('modalViewer')?.addEventListener('load', () => {
+            if (holoMode !== 'off') setHoloMode(holoMode);
         });
 
         // Intensity slider
         document.getElementById('holoIntensitySlider')?.addEventListener('input', (e) => {
             holoIntensity = parseInt(e.target.value) / 100;
             document.getElementById('holoIntensityValue').textContent = e.target.value + '%';
-            [document.getElementById('mainHoloOverlay'), document.getElementById('modalHoloOverlay')].forEach(overlay => {
-                overlay.style.setProperty('--holo-intensity', holoIntensity);
-            });
+            getViewers().forEach(v => updateHoloEmissive(v));
         });
     </script>
 </body>
