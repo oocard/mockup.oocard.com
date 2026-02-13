@@ -1,0 +1,200 @@
+{
+  "timestamp": "2025-08-19T14:58:13.377Z",
+  "previewPageStyles": {
+    "header": {
+      "color": "rgb(255, 255, 255)",
+      "fontSize": "16px",
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", Roboto, Oxygen, Ubuntu, sans-serif",
+      "margin": "0px 0px 40px",
+      "padding": "0px 20px"
+    },
+    "buttons": [
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(33, 158, 188)",
+        "border": "",
+        "borderRadius": "0px",
+        "padding": "16px 24px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(40, 167, 69)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgb(33, 158, 188)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "10px",
+        "padding": "12px 18px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "12px",
+        "padding": "16px 32px",
+        "fontSize": "16px"
+      },
+      {
+        "backgroundColor": "rgba(2, 48, 71, 0.1)",
+        "color": "rgb(2, 48, 71)",
+        "border": "0px none rgb(2, 48, 71)",
+        "borderRadius": "12px",
+        "padding": "16px 32px",
+        "fontSize": "16px"
+      },
+      {
+        "backgroundColor": "rgba(2, 48, 71, 0.1)",
+        "color": "rgb(2, 48, 71)",
+        "border": "0px none rgb(2, 48, 71)",
+        "borderRadius": "12px",
+        "padding": "16px 32px",
+        "fontSize": "16px"
+      }
+    ],
+    "body": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(0, 0, 0)",
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", Roboto, Oxygen, Ubuntu, sans-serif"
+    }
+  },
+  "testPageStyles": {
+    "header": {
+      "color": "rgb(255, 255, 255)",
+      "fontSize": "16px",
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", Roboto, Oxygen, Ubuntu, sans-serif",
+      "margin": "0px 0px 40px",
+      "padding": "0px 20px"
+    },
+    "buttons": [
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(33, 158, 188)",
+        "border": "",
+        "borderRadius": "0px",
+        "padding": "16px 24px",
+        "fontSize": "14px"
+      },
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "12px",
+        "padding": "16px 32px",
+        "fontSize": "16px"
+      },
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "12px",
+        "padding": "16px 32px",
+        "fontSize": "16px"
+      },
+      {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "border": "0px none rgb(255, 255, 255)",
+        "borderRadius": "12px",
+        "padding": "16px 32px",
+        "fontSize": "16px"
+      }
+    ],
+    "body": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(0, 0, 0)",
+      "fontFamily": "-apple-system, \"system-ui\", \"Segoe UI\", Roboto, Oxygen, Ubuntu, sans-serif"
+    }
+  },
+  "consistencyAnalysis": {
+    "consistencyScore": 0.8333333333333334,
+    "issues": [
+      "Button background colors differ between pages"
+    ],
+    "matches": [
+      "Body background colors match",
+      "Body text colors match",
+      "Font families match",
+      "Header colors match",
+      "Header font sizes match"
+    ]
+  }
+}

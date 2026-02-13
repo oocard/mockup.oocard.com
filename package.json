@@ -1,0 +1,21 @@
+{
+  "name": "3d-card-generator",
+  "version": "1.0.0",
+  "description": "3D Card rendering tool for WordPress with Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "echo \"No tests specified\""
+  },
+  "dependencies": {
+    "puppeteer": "^24.16.2",
+    "three": "^0.158.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

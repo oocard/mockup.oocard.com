@@ -1,0 +1,77 @@
+name = "3d-card-generator"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+# Account and zone IDs (to be filled in during deployment)
+# account_id = "your-account-id"
+# zone_id = "your-zone-id"
+
+# R2 bucket binding for file storage
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "card-assets"
+
+# KV namespace for session management
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "4f782624686b4739ac74b9d13bea27d6"
+preview_id = "1fee39ae8ef64fd4b02add95dd0d1318"
+
+# Environment variables
+[vars]
+MAX_FILE_SIZE = "10485760"  # 10MB in bytes
+SESSION_TIMEOUT = "3600"     # 1 hour in seconds
+STORAGE_TYPE = "r2"          # Storage backend type
+SESSION_TYPE = "kv"          # Session storage type
+# Google OAuth credentials (to be set via secrets)
+# GOOGLE_CLIENT_ID = ""
+# GOOGLE_CLIENT_SECRET = ""
+# GOOGLE_REDIRECT_URI = ""
+
+[env.production]
+name = "3d-card-generator-prod"
+routes = [
+  { pattern = "mockup.oocard.com/*", zone_name = "oocard.com" }
+]
+
+# R2 bucket binding for production
+[[env.production.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "card-assets"
+
+# KV namespace for production
+[[env.production.kv_namespaces]]
+binding = "SESSIONS"
+id = "4f782624686b4739ac74b9d13bea27d6"
+
+# Production environment variables
+[env.production.vars]
+MAX_FILE_SIZE = "10485760"
+SESSION_TIMEOUT = "3600"
+STORAGE_TYPE = "r2"
+SESSION_TYPE = "kv"
+# Google OAuth credentials (to be set via secrets)
+# GOOGLE_CLIENT_ID = ""
+# GOOGLE_CLIENT_SECRET = ""
+# GOOGLE_REDIRECT_URI = ""
+
+# Build configuration
+[build]
+command = "npm install"
+
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
+upstream_protocol = "https"
+
+# Observability
+[observability]
+enabled = true
+
+# Limits - using default for free plan
+# Note: cpu_ms is removed as it causes issues with free plan deployment
+
+# Compatibility flags for better Node.js compatibility
+compatibility_flags = ["nodejs_compat"]

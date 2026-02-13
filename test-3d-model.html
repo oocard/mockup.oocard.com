@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Test Viewer</title>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .viewer-container {
+            width: 100%;
+            height: 600px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+            background: #f0f0f0;
+        }
+        
+        model-viewer {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        
+        input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            background: #f8f9ff;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        .info {
+            background: #f0f8ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        
+        .info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>3D Card Model Test Viewer</h1>
+        
+        <div class="info">
+            <h3>Test Your GLB Model</h3>
+            <p>Upload a GLB file to test the 3D model rendering. You can also test with the live API.</p>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".glb" />
+        
+        <div class="controls">
+            <button onclick="loadTestModel()">Load Test Model from API</button>
+            <button onclick="resetView()">Reset View</button>
+            <button onclick="toggleWireframe()">Toggle Wireframe</button>
+            <button onclick="showStats()">Show Model Stats</button>
+        </div>
+        
+        <div class="status" id="status"></div>
+        
+        <div class="viewer-container">
+            <model-viewer 
+                id="viewer"
+                camera-controls
+                auto-rotate
+                shadow-intensity="1"
+                exposure="1"
+                tone-mapping="neutral">
+            </model-viewer>
+        </div>
+        
+        <div class="info">
+            <h3>Model Information</h3>
+            <pre id="modelInfo">No model loaded</pre>
+        </div>
+    </div>
+
+    <script>
+        const viewer = document.getElementById('viewer');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const modelInfo = document.getElementById('modelInfo');
+        
+        // File input handler
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                loadModel(url, file.name);
+            }
+        });
+        
+        // Load model
+        function loadModel(url, name = 'model.glb') {
+            showStatus('Loading model...', 'info');
+            viewer.src = url;
+            
+            viewer.addEventListener('load', () => {
+                showStatus('Model loaded successfully!', 'success');
+                updateModelInfo(name);
+            }, { once: true });
+            
+            viewer.addEventListener('error', (e) => {
+                showStatus('Error loading model: ' + e.detail, 'error');
+            }, { once: true });
+        }
+        
+        // Load test model from API
+        async function loadTestModel() {
+            try {
+                showStatus('Fetching test model from API...', 'info');
+                
+                // First create a test card
+                const formData = new FormData();
+                
+                // Create test images
+                const frontCanvas = document.createElement('canvas');
+                frontCanvas.width = 400;
+                frontCanvas.height = 250;
+                const frontCtx = frontCanvas.getContext('2d');
+                frontCtx.fillStyle = '#4A90E2';
+                frontCtx.fillRect(0, 0, 400, 250);
+                frontCtx.fillStyle = 'white';
+                frontCtx.font = '30px Arial';
+                frontCtx.textAlign = 'center';
+                frontCtx.fillText('TEST FRONT', 200, 125);
+                
+                const backCanvas = document.createElement('canvas');
+                backCanvas.width = 400;
+                backCanvas.height = 250;
+                const backCtx = backCanvas.getContext('2d');
+                backCtx.fillStyle = '#2ECC71';
+                backCtx.fillRect(0, 0, 400, 250);
+                backCtx.fillStyle = 'white';
+                backCtx.font = '30px Arial';
+                backCtx.textAlign = 'center';
+                backCtx.fillText('TEST BACK', 200, 125);
+                
+                // Convert to blobs
+                const frontBlob = await new Promise(r => frontCanvas.toBlob(r, 'image/png'));
+                const backBlob = await new Promise(r => backCanvas.toBlob(r, 'image/png'));
+                
+                formData.append('frontImage', new File([frontBlob], 'test-F.png'));
+                formData.append('backImage', new File([backBlob], 'test-R.png'));
+                
+                // Upload
+                const uploadRes = await fetch('https://mockup.oocard.com/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!uploadRes.ok) throw new Error('Upload failed');
+                
+                const uploadData = await uploadRes.json();
+                const sessionId = uploadData.sessionId;
+                
+                // Process
+                const processRes = await fetch(`https://mockup.oocard.com/api/process?sessionId=${sessionId}`, {
+                    method: 'POST'
+                });
+                
+                if (!processRes.ok) throw new Error('Processing failed');
+                
+                // Poll for completion
+                let attempts = 0;
+                while (attempts < 30) {
+                    const statusRes = await fetch(`https://mockup.oocard.com/api/status?sessionId=${sessionId}`);
+                    const statusData = await statusRes.json();
+                    
+                    if (statusData.status === 'completed') {
+                        // Download GLB
+                        const glbRes = await fetch(`https://mockup.oocard.com/api/download?sessionId=${sessionId}`);
+                        const glbBlob = await glbRes.blob();
+                        const glbUrl = URL.createObjectURL(glbBlob);
+                        loadModel(glbUrl, 'test-card.glb');
+                        break;
+                    } else if (statusData.status === 'error') {
+                        throw new Error(statusData.error || 'Processing failed');
+                    }
+                    
+                    await new Promise(r => setTimeout(r, 2000));
+                    attempts++;
+                }
+                
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Update model info
+        function updateModelInfo(name) {
+            const scene = viewer.model;
+            if (!scene) {
+                modelInfo.textContent = 'No model data available';
+                return;
+            }
+            
+            let info = {
+                name: name,
+                boundingBox: viewer.getBoundingBoxCenter(),
+                fieldOfView: viewer.fieldOfView,
+                cameraOrbit: viewer.cameraOrbit,
+                cameraTarget: viewer.cameraTarget,
+                timestamp: new Date().toISOString()
+            };
+            
+            modelInfo.textContent = JSON.stringify(info, null, 2);
+        }
+        
+        // Control functions
+        function resetView() {
+            viewer.cameraOrbit = '0deg 75deg 105%';
+            viewer.cameraTarget = '0 0 0';
+            viewer.fieldOfView = '45deg';
+        }
+        
+        function toggleWireframe() {
+            // Model-viewer doesn't directly support wireframe
+            alert('Wireframe mode is not available in model-viewer');
+        }
+        
+        function showStats() {
+            updateModelInfo(viewer.src || 'current model');
+        }
+        
+        // Status display
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = 'status ' + type;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
