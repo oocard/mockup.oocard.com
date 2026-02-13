@@ -13,6 +13,8 @@ export async function handleUpload(request, env, corsHeaders) {
     const frontFile = formData.get('frontImage');
     const backFile = formData.get('backImage');
     const overlayFile = formData.get('overlay');
+    const copyrightEnabled = formData.get('copyrightEnabled') === 'on';
+    const copyrightText = formData.get('copyrightText') || '';
     
     // Validate required files
     if (!frontFile || !backFile) {
@@ -34,10 +36,10 @@ export async function handleUpload(request, env, corsHeaders) {
       });
     }
     
-    // Validate naming convention
+    // Validate file extensions (PNG only)
     if (!validateFileName(frontFile.name, 'F') || !validateFileName(backFile.name, 'R')) {
       return new Response(JSON.stringify({ 
-        error: 'Invalid file naming. Front image must end with -F.png and back image must end with -R.png' 
+        error: 'Images must be PNG format' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -84,7 +86,9 @@ export async function handleUpload(request, env, corsHeaders) {
       frontFileName: frontFile.name,
       backFileName: backFile.name,
       frontFileSize: frontFile.size,
-      backFileSize: backFile.size
+      backFileSize: backFile.size,
+      copyrightEnabled: copyrightEnabled,
+      copyrightText: copyrightEnabled ? copyrightText : null
     };
     
     await env.SESSIONS.put(sessionId, JSON.stringify(sessionData), {

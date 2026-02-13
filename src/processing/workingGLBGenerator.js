@@ -1,3 +1,5 @@
+import { generateCopyrightPNG, imageBufferToDataURL } from './imageProcessor.js';
+
 /**
  * Working GLB generator that creates valid glTF 2.0 files
  * This creates a simple textured card that works with Three.js GLTFLoader
@@ -7,9 +9,10 @@
  * Create a working GLB file with embedded textures
  * @param {string} frontTextureData - Base64 data URL for front texture  
  * @param {string} backTextureData - Base64 data URL for back texture
+ * @param {Object} copyrightOptions - Copyright text options { enabled: boolean, text: string }
  * @returns {ArrayBuffer} Valid GLB file
  */
-export async function createWorkingGLB(frontTextureData, backTextureData) {
+export async function createWorkingGLB(frontTextureData, backTextureData, copyrightOptions = { enabled: false }) {
   try {
     // Extract base64 data from data URLs
     const frontBase64 = frontTextureData.replace(/^data:image\/[a-z]+;base64,/, '');
@@ -18,6 +21,15 @@ export async function createWorkingGLB(frontTextureData, backTextureData) {
     // Convert base64 to binary data
     const frontImageData = base64ToArrayBuffer(frontBase64);
     const backImageData = base64ToArrayBuffer(backBase64);
+    
+    // Generate copyright edge texture if enabled
+    let edgeImageData = null;
+    if (copyrightOptions.enabled && copyrightOptions.text) {
+      // Generate PNG with copyright text (512px wide, 48px tall for the edge strip)
+      // Using 48px height to accommodate the 7x11 Inter-style font scaled 2x (22px) plus padding
+      const copyrightPNG = generateCopyrightPNG(copyrightOptions.text, 512, 48);
+      edgeImageData = copyrightPNG;
+    }
     
     // Create geometry data and get vertex counts
     const geometryData = createCardGeometry();
@@ -28,13 +40,15 @@ export async function createWorkingGLB(frontTextureData, backTextureData) {
     const geometrySize = geometryBuffer.byteLength;
     const frontImageSize = frontImageData.byteLength;
     const backImageSize = backImageData.byteLength;
+    const edgeImageSize = edgeImageData ? edgeImageData.byteLength : 0;
     
     // Align to 4-byte boundaries
     const geometryAligned = alignTo4(geometrySize);
     const frontImageAligned = alignTo4(frontImageSize);
     const backImageAligned = alignTo4(backImageSize);
+    const edgeImageAligned = edgeImageData ? alignTo4(edgeImageSize) : 0;
     
-    const totalBinarySize = geometryAligned + frontImageAligned + backImageAligned;
+    const totalBinarySize = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned;
     
     // Create glTF JSON
     const gltf = {
@@ -109,7 +123,17 @@ export async function createWorkingGLB(frontTextureData, backTextureData) {
           },
           "doubleSided": true
         },
-        {
+        edgeImageData ? {
+          "name": "Edge Material",
+          "pbrMetallicRoughness": {
+            "baseColorTexture": {
+              "index": 2
+            },
+            "metallicFactor": 0.0,
+            "roughnessFactor": 0.8
+          },
+          "doubleSided": true
+        } : {
           "name": "Edge Material",
           "pbrMetallicRoughness": {
             "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
@@ -119,26 +143,52 @@ export async function createWorkingGLB(frontTextureData, backTextureData) {
           "doubleSided": true
         }
       ],
-      "textures": [
-        {
-          "source": 0
-        },
-        {
-          "source": 1
-        }
+      "samplers": edgeImageData ? [
+        { "magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071 },  // Front/back: clamp to edge
+        { "magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 33071 }   // Edge: repeat horizontally, clamp vertically
+      ] : [
+        { "magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071 }   // Clamp to edge
       ],
-      "images": [
-        {
-          "bufferView": 1,
-          "mimeType": "image/png"
-        },
-        {
-          "bufferView": 2,
-          "mimeType": "image/png"
-        }
+      "textures": edgeImageData ? [
+        { "source": 0, "sampler": 0 },
+        { "source": 1, "sampler": 0 },
+        { "source": 2, "sampler": 1 }
+      ] : [
+        { "source": 0, "sampler": 0 },
+        { "source": 1, "sampler": 0 }
+      ],
+      "images": edgeImageData ? [
+        { "bufferView": 1, "mimeType": "image/png" },
+        { "bufferView": 2, "mimeType": "image/png" },
+        { "bufferView": 3, "mimeType": "image/png" }
+      ] : [
+        { "bufferView": 1, "mimeType": "image/png" },
+        { "bufferView": 2, "mimeType": "image/png" }
       ],
       "accessors": createAccessors(geometryBuffer, frontVertexCount, frontIndexCount, backVertexCount, backIndexCount, edgeVertexCount, edgeIndexCount),
-      "bufferViews": [
+      "bufferViews": edgeImageData ? [
+        {
+          "buffer": 0,
+          "byteOffset": 0,
+          "byteLength": geometrySize,
+          "target": 34962
+        },
+        {
+          "buffer": 0,
+          "byteOffset": geometryAligned,
+          "byteLength": frontImageSize
+        },
+        {
+          "buffer": 0,
+          "byteOffset": geometryAligned + frontImageAligned,
+          "byteLength": backImageSize
+        },
+        {
+          "buffer": 0,
+          "byteOffset": geometryAligned + frontImageAligned + backImageAligned,
+          "byteLength": edgeImageSize
+        }
+      ] : [
         {
           "buffer": 0,
           "byteOffset": 0,
@@ -186,6 +236,12 @@ export async function createWorkingGLB(frontTextureData, backTextureData) {
     
     // Add back image
     binaryView.set(new Uint8Array(backImageData), offset);
+    
+    // Add edge image if copyright is enabled
+    if (edgeImageData) {
+      offset = geometryAligned + frontImageAligned + backImageAligned;
+      binaryView.set(new Uint8Array(edgeImageData), offset);
+    }
     
     // Create GLB file
     const glbSize = 12 + 8 + jsonPadded.byteLength + 8 + totalBinarySize;
@@ -631,8 +687,33 @@ function createMatchingRoundedEdges(w, h, r, d) {
     perimeterVertices.push({ x, y, nx: -1, ny: 0 });
   }
   
+  // First, calculate total perimeter length for proper UV mapping
+  let totalPerimeter = 0;
+  const segmentLengths = [];
+  for (let i = 0; i < perimeterVertices.length; i++) {
+    const current = perimeterVertices[i];
+    const next = perimeterVertices[(i + 1) % perimeterVertices.length];
+    const dx = next.x - current.x;
+    const dy = next.y - current.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segmentLengths.push(len);
+    totalPerimeter += len;
+  }
+  
+  // The edge thickness (height of the edge strip) is 2*d
+  const edgeHeight = 2 * d;
+  
+  // Calculate UV scale factor to maintain aspect ratio
+  // We want the texture to tile properly - the texture is 512x32 (16:1 aspect)
+  // The perimeter is much longer than the edge height
+  // Scale U so that 1 unit of U = 1 unit of V in world space
+  const textureAspect = 512 / 48; // ~10.67:1
+  const uvScale = totalPerimeter / edgeHeight / textureAspect;
+  
   // Create edge quads between front and back faces
   let vertexCount = 0;
+  let accumulatedLength = 0;
+  
   for (let i = 0; i < perimeterVertices.length; i++) {
     const current = perimeterVertices[i];
     const next = perimeterVertices[(i + 1) % perimeterVertices.length];
@@ -668,9 +749,14 @@ function createMatchingRoundedEdges(w, h, r, d) {
       nx, ny, 0   // current front
     );
     
-    // Simple UV mapping along the perimeter
-    const u1 = i / perimeterVertices.length;
-    const u2 = (i + 1) / perimeterVertices.length;
+    // UV mapping that maintains proper aspect ratio
+    // U is based on actual distance along perimeter (scaled for texture aspect)
+    // This allows the texture to tile/repeat naturally
+    // Flip U coordinates (use negative direction) so text reads correctly from outside
+    const u1 = (1 - accumulatedLength / totalPerimeter) * uvScale;
+    const u2 = (1 - (accumulatedLength + segmentLengths[i]) / totalPerimeter) * uvScale;
+    accumulatedLength += segmentLengths[i];
+    
     uvs.push(
       u1, 0,  // current back
       u2, 0,  // next back

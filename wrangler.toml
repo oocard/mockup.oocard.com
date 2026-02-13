@@ -1,11 +1,12 @@
 name = "3d-card-generator"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
-node_compat = true
 
-# Account and zone IDs (to be filled in during deployment)
-# account_id = "your-account-id"
-# zone_id = "your-zone-id"
+# Account ID
+account_id = "861e468ceb2e1a216a9919f92c731e72"
+
+# Compatibility flags for Node.js compatibility
+compatibility_flags = ["nodejs_compat"]
 
 # R2 bucket binding for file storage
 [[r2_buckets]]
@@ -69,9 +70,3 @@ upstream_protocol = "https"
 # Observability
 [observability]
 enabled = true
-
-# Limits - using default for free plan
-# Note: cpu_ms is removed as it causes issues with free plan deployment
-
-# Compatibility flags for better Node.js compatibility
-compatibility_flags = ["nodejs_compat"]

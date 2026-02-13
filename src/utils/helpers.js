@@ -1,13 +1,12 @@
 /**
  * Validate file naming convention
  * @param {string} filename - The file name to validate
- * @param {string} type - Either 'F' for front or 'R' for reverse
- * @returns {boolean} Whether the filename is valid
+ * @param {string} type - Either 'F' for front or 'R' for reverse (no longer enforced)
+ * @returns {boolean} Whether the filename is valid (always true for PNG files)
  */
 export function validateFileName(filename, type) {
-  // Allow any naming pattern as long as it ends with -F or -R before the extension
-  const pattern = new RegExp(`-${type}\\.(png|PNG)$`, 'i');
-  return pattern.test(filename);
+  // Accept any PNG file - naming convention no longer enforced
+  return /\.(png|PNG)$/i.test(filename);
 }
 
 /**

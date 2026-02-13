@@ -9,536 +9,266 @@ export function servePreview(sessionId = null) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Card Preview - OOCard</title>
+    <title>Preview - 3D Card Generator</title>
     <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    },
+                    colors: {
+                        ocean: {
+                            950: '#03045e',
+                            800: '#0077b6',
+                            600: '#00b4d8',
+                            300: '#90e0ef',
+                            100: '#caf0f8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #8ECAE6 0%, #219EBC 100%);
-            min-height: 100vh;
-            padding: 40px 20px;
-        }
-        
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 40px;
-            padding: 0 20px;
-        }
-        
-        .header h1 {
-            font-size: 36px;
-            margin-bottom: 16px;
-            font-weight: 700;
-        }
-        
-        .header p {
-            font-size: 18px;
-            opacity: 0.9;
-            font-weight: 400;
-        }
-        
-        .preview-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(2, 48, 71, 0.2);
-            animation: slideUp 0.6s ease-out;
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .viewer-section {
-            padding: 0;
-            background: #f8f9fa;
-        }
-        
-        .model-viewer-container {
-            width: 100%;
-            height: 70vh;
-            min-height: 500px;
-            position: relative;
-            background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
-                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
-                        linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
-                        linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-        }
-        
         model-viewer {
             width: 100%;
             height: 100%;
             background-color: transparent;
             --poster-color: transparent;
-            --progress-bar-color: #FFB703;
-            --progress-mask: rgba(255, 255, 255, 0.2);
-        }
-        
-        .loading-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.95);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-        }
-        
-        .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #FFB703;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .controls-panel {
-            padding: 30px;
-            background: white;
-            border-top: 1px solid #e9ecef;
-        }
-        
-        .controls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        
-        .control-group {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        
-        .control-group h3 {
-            color: #495057;
-            margin-bottom: 15px;
-            font-size: 16px;
-            font-weight: 600;
-        }
-        
-        .control-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .control-btn {
-            background: #219EBC;
-            color: white;
-            border: none;
-            padding: 12px 18px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-            flex: 1;
-            min-width: 120px;
-        }
-        
-        .control-btn:hover {
-            background: #023047;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(33, 158, 188, 0.4);
-        }
-        
-        .control-btn.secondary {
-            background: #6c757d;
-        }
-        
-        .control-btn.secondary:hover {
-            background: #5a6268;
-        }
-        
-        .control-btn.active {
-            background: #28a745;
-        }
-        
-        .slider-group {
-            margin-bottom: 15px;
-        }
-        
-        .slider-label {
-            display: flex;
-            justify-content: between;
-            align-items: center;
-            margin-bottom: 5px;
-            font-size: 14px;
-            color: #495057;
-        }
-        
-        .slider-value {
-            font-weight: 600;
-            color: #219EBC;
-        }
-        
-        .slider {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: #dee2e6;
-            outline: none;
-            -webkit-appearance: none;
-        }
-        
-        .slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #219EBC;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .slider::-webkit-slider-thumb:hover {
-            transform: scale(1.2);
-            background: #023047;
-        }
-        
-        .slider::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #219EBC;
-            cursor: pointer;
-            border: none;
-        }
-        
-        .card-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            background: #e9ecef;
-            padding: 20px;
-            border-radius: 12px;
-        }
-        
-        .info-item {
-            text-align: center;
-            padding: 15px;
-            background: white;
-            border-radius: 8px;
-        }
-        
-        .info-label {
-            font-size: 12px;
-            color: #6c757d;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        
-        .info-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: #495057;
-        }
-        
-        .action-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .action-btn {
-            background: linear-gradient(135deg, #FFB703 0%, #FB8500 100%);
-            color: white;
-            border: none;
-            padding: 16px 32px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 4px 12px rgba(251, 133, 0, 0.2);
-        }
-        
-        .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(251, 133, 0, 0.3);
-        }
-        
-        .action-btn.secondary {
-            background: rgba(2, 48, 71, 0.1);
-            color: #023047;
-            box-shadow: 0 4px 12px rgba(2, 48, 71, 0.1);
-        }
-        
-        .action-btn.secondary:hover {
-            background: rgba(2, 48, 71, 0.15);
-            box-shadow: 0 8px 24px rgba(2, 48, 71, 0.15);
-        }
-        
-        .upload-section {
-            padding: 30px;
-            text-align: center;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .upload-area {
-            border: 2px dashed #dee2e6;
-            border-radius: 12px;
-            padding: 40px 20px;
-            margin: 20px 0;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        .upload-area:hover {
-            border-color: #219EBC;
-            background: rgba(142, 202, 230, 0.08);
-        }
-        
-        .upload-area.dragover {
-            border-color: #219EBC;
-            background: rgba(142, 202, 230, 0.12);
-            transform: scale(1.02);
-        }
-        
-        .upload-icon {
-            font-size: 48px;
-            color: #adb5bd;
-            margin-bottom: 15px;
-        }
-        
-        .upload-text {
-            color: #495057;
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-        
-        .upload-subtext {
-            color: #6c757d;
-            font-size: 14px;
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
-        @media (max-width: 768px) {
-            .tab-container {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            
-            .tab-link {
-                padding: 10px 18px;
-                font-size: 14px;
-            }
-            .controls-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .control-buttons {
-                flex-direction: column;
-            }
-            
-            .control-btn {
-                min-width: auto;
-            }
-            
-            .action-buttons {
-                flex-direction: column;
-            }
-            
-            .model-viewer-container {
-                height: 50vh;
-                min-height: 300px;
-            }
+            --progress-bar-color: #0077b6;
         }
     </style>
 </head>
-<body>
-    <div class="header">
-        <h1>🎴 3D Card Preview</h1>
-        <p>Interactive 3D viewer powered by Google Model-Viewer</p>
-    </div>
-    
-    <div class="preview-container">
-        <!-- Material-UI Style Navigation Tabs -->
-        <div class="mui-tabs" style="background: white; border-bottom: 1px solid #e0e0e0;">
-            <div class="mui-tab-list" style="display: flex; padding: 0 30px;">
-                <a href="/" class="mui-tab" style="background: none; border: none; padding: 16px 24px; font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(2,48,71,0.6); border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.3s; min-width: 90px; text-decoration: none; display: inline-block;">Upload</a>
-                <button class="mui-tab mui-tab-active" style="background: none; border: none; padding: 16px 24px; font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: #219EBC; border-bottom: 2px solid #219EBC; cursor: pointer; transition: all 0.3s; min-width: 90px;">Preview</button>
-                <a href="/test" class="mui-tab" style="background: none; border: none; padding: 16px 24px; font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(2,48,71,0.6); border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.3s; min-width: 90px; text-decoration: none; display: inline-block;">Test</a>
-                <a href="/drive" class="mui-tab" style="background: none; border: none; padding: 16px 24px; font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(2,48,71,0.6); border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.3s; min-width: 90px; text-decoration: none; display: inline-block;">Drive</a>
+<body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
+    <!-- Header -->
+    <header class="border-b border-ocean-300 bg-white">
+        <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-3">
+                <svg class="size-8 text-ocean-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M3 10h18" />
+                </svg>
+                <span class="text-lg font-semibold text-ocean-950">OOCard</span>
             </div>
+            <nav class="flex items-center gap-6">
+                <a href="/" class="text-sm text-ocean-950/60 hover:text-ocean-800">Upload</a>
+                <a href="/preview" class="text-sm font-medium text-ocean-800">Preview</a>
+                <a href="/test" class="text-sm text-ocean-950/60 hover:text-ocean-800">Test</a>
+                <a href="/drive" class="text-sm text-ocean-950/60 hover:text-ocean-800">Drive</a>
+            </nav>
         </div>
-        
-        <style>
-            .mui-tab:hover {
-                background-color: rgba(33, 158, 188, 0.06) !important;
-                color: #219EBC !important;
-            }
-            .mui-tab-active {
-                color: #219EBC !important;
-                border-bottom-color: #219EBC !important;
-            }
-        </style>
-        <div class="upload-section" id="uploadSection">
-            <h2>Load Your 3D Card</h2>
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📤</div>
-                <div class="upload-text">Drop your GLB file here or click to browse</div>
-                <div class="upload-subtext">Supports GLB files up to 10MB</div>
-                <input type="file" id="fileInput" accept=".glb" style="display: none;">
+    </header>
+
+    <!-- Main Content -->
+    <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <div class="mb-8">
+            <h1 class="text-2xl font-semibold tracking-tight text-ocean-950 sm:text-3xl">3D Card Preview</h1>
+            <p class="mt-2 text-ocean-950/70">Interactive 3D viewer powered by Google Model-Viewer</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div id="uploadSection" class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+            <h2 class="mb-4 text-sm font-medium text-ocean-950">Load Your 3D Card</h2>
+            <div 
+                id="uploadArea"
+                class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-ocean-300 bg-ocean-100/50 p-12 hover:border-ocean-600 hover:bg-ocean-100"
+            >
+                <svg class="mb-4 size-12 text-ocean-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+                </svg>
+                <p class="mb-1 text-sm font-medium text-ocean-950">Drop your GLB file here or click to browse</p>
+                <p class="text-xs text-ocean-950/60">Supports GLB files up to 10MB</p>
+                <input type="file" id="fileInput" accept=".glb" class="hidden">
             </div>
-            <p style="margin-top: 20px; color: #6c757d;">
-                Don't have a 3D card? <a href="/" style="color: #667eea;">Create one here</a>
+            <p class="mt-4 text-center text-sm text-ocean-950/60">
+                Don't have a 3D card? <a href="/" class="font-medium text-ocean-800 hover:underline">Create one here</a>
             </p>
         </div>
-        
-        <div class="viewer-section hidden" id="viewerSection">
-            <div class="model-viewer-container">
-                <div class="loading-overlay" id="loadingOverlay">
-                    <div class="loading-spinner"></div>
+
+        <!-- Gallery Section -->
+        <div id="gallerySection" class="mt-8 rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+            <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-sm font-medium text-ocean-950">Previously Generated Cards</h2>
+                <button onclick="refreshGallery()" class="inline-flex items-center gap-1.5 rounded-md border border-ocean-300 bg-white px-2.5 py-1.5 text-xs font-medium text-ocean-950 hover:bg-ocean-100">
+                    <svg id="galleryRefreshIcon" class="size-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clip-rule="evenodd" />
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+            <div id="galleryGrid" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                <div class="col-span-full py-8 text-center text-sm text-ocean-950/60">
+                    <svg class="mx-auto mb-2 size-6 animate-spin text-ocean-600" viewBox="0 0 24 24" fill="none">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading gallery...
                 </div>
-                <model-viewer 
-                    id="cardViewer"
-                    camera-controls 
-                    touch-action="pan-y"
-                    disable-zoom
-                    auto-rotate
-                    auto-rotate-delay="1000"
-                    rotation-per-second="30deg"
-                    shadow-intensity="1"
-                    shadow-softness="0.3"
-                    exposure="1"
-                    tone-mapping="neutral"
-                    environment-image="neutral"
-                    skybox-image="neutral">
-                    <div slot="poster">
-                        <div class="loading-spinner"></div>
+            </div>
+            <p id="galleryCount" class="mt-4 text-xs text-ocean-950/60"></p>
+        </div>
+
+        <!-- GLB Modal -->
+        <div id="glbModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+            <div class="relative w-full max-w-4xl rounded-lg bg-white shadow-2xl">
+                <div class="flex items-center justify-between border-b border-ocean-200 px-4 py-3">
+                    <h3 id="modalTitle" class="text-sm font-medium text-ocean-950">3D Card Preview</h3>
+                    <button onclick="closeModal()" class="rounded-md p-1 text-ocean-950/60 hover:bg-ocean-100 hover:text-ocean-950">
+                        <svg class="size-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="relative h-[60vh] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                    <div id="modalLoading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
+                        <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
-                </model-viewer>
+                    <model-viewer 
+                        id="modalViewer"
+                        camera-controls 
+                        touch-action="pan-y"
+                        auto-rotate
+                        shadow-intensity="1"
+                        exposure="1"
+                        style="width: 100%; height: 100%;">
+                    </model-viewer>
+                </div>
+                <div class="flex items-center justify-between border-t border-ocean-200 px-4 py-3">
+                    <p id="modalInfo" class="text-xs text-ocean-950/60"></p>
+                    <div class="flex gap-2">
+                        <a id="modalDownloadBtn" href="#" class="rounded-md bg-ocean-100 px-3 py-1.5 text-xs font-medium text-ocean-950 hover:bg-ocean-200">Download GLB</a>
+                        <button onclick="closeModal()" class="rounded-md bg-ocean-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-ocean-950">Close</button>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <div class="controls-panel hidden" id="controlsPanel">
-            <div class="controls-grid">
-                <div class="control-group">
-                    <h3>🎥 Camera Controls</h3>
-                    <div class="control-buttons">
-                        <button class="control-btn" onclick="resetCamera()">Reset View</button>
-                        <button class="control-btn" onclick="frontView()">Front View</button>
-                        <button class="control-btn" onclick="backView()">Back View</button>
-                        <button class="control-btn" onclick="sideView()">Side View</button>
+
+        <!-- Viewer Section -->
+        <div id="viewerSection" class="hidden space-y-6">
+            <!-- 3D Viewer -->
+            <div class="overflow-hidden rounded-lg border border-ocean-300 bg-white shadow-sm">
+                <div class="relative h-[500px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                    <div id="loadingOverlay" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
+                        <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
-                    <div class="slider-group">
-                        <div class="slider-label">
-                            <span>Field of View</span>
-                            <span class="slider-value" id="fovValue">45°</span>
-                        </div>
-                        <input type="range" class="slider" id="fovSlider" min="10" max="90" value="45">
-                    </div>
-                </div>
-                
-                <div class="control-group">
-                    <h3>🔄 Animation</h3>
-                    <div class="control-buttons">
-                        <button class="control-btn active" id="autoRotateBtn" onclick="toggleAutoRotate()">Auto Rotate: ON</button>
-                        <button class="control-btn" onclick="slowRotation()">Slow</button>
-                        <button class="control-btn" onclick="normalRotation()">Normal</button>
-                        <button class="control-btn" onclick="fastRotation()">Fast</button>
-                    </div>
-                </div>
-                
-                <div class="control-group">
-                    <h3>💡 Lighting</h3>
-                    <div class="slider-group">
-                        <div class="slider-label">
-                            <span>Exposure</span>
-                            <span class="slider-value" id="exposureValue">1.0</span>
-                        </div>
-                        <input type="range" class="slider" id="exposureSlider" min="0.1" max="3.0" value="1.0" step="0.1">
-                    </div>
-                    <div class="slider-group">
-                        <div class="slider-label">
-                            <span>Shadow Intensity</span>
-                            <span class="slider-value" id="shadowValue">1.0</span>
-                        </div>
-                        <input type="range" class="slider" id="shadowSlider" min="0" max="2" value="1" step="0.1">
-                    </div>
-                </div>
-                
-                <div class="control-group">
-                    <h3>🎨 Display Options</h3>
-                    <div class="control-buttons">
-                        <button class="control-btn" id="wireframeBtn" onclick="toggleWireframe()">Wireframe: OFF</button>
-                        <button class="control-btn" onclick="toggleEnvironment()">Environment</button>
-                        <button class="control-btn" onclick="resetAll()">Reset All</button>
-                    </div>
+                    <model-viewer 
+                        id="cardViewer"
+                        camera-controls 
+                        touch-action="pan-y"
+                        auto-rotate
+                        auto-rotate-delay="1000"
+                        rotation-per-second="30deg"
+                        shadow-intensity="1"
+                        shadow-softness="0.3"
+                        exposure="1"
+                        tone-mapping="neutral"
+                        environment-image="neutral">
+                    </model-viewer>
                 </div>
             </div>
-            
-            <div class="card-info">
-                <div class="info-item">
-                    <div class="info-label">File Size</div>
-                    <div class="info-value" id="fileSize">-</div>
+
+            <!-- Controls -->
+            <div class="grid gap-6 lg:grid-cols-2">
+                <!-- Camera Controls -->
+                <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                    <h3 class="mb-4 text-sm font-medium text-ocean-950">Camera Controls</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="resetCamera()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Reset View</button>
+                        <button onclick="frontView()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Front</button>
+                        <button onclick="backView()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Back</button>
+                        <button onclick="sideView()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Side</button>
+                    </div>
+                    <div class="mt-4">
+                        <label class="mb-2 flex items-center justify-between text-sm">
+                            <span class="text-ocean-950/70">Field of View</span>
+                            <span id="fovValue" class="tabular-nums font-medium text-ocean-950">45°</span>
+                        </label>
+                        <input type="range" id="fovSlider" min="10" max="90" value="45" class="w-full accent-ocean-800">
+                    </div>
                 </div>
-                <div class="info-item">
-                    <div class="info-label">Format</div>
-                    <div class="info-value">GLB 2.0</div>
+
+                <!-- Animation Controls -->
+                <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                    <h3 class="mb-4 text-sm font-medium text-ocean-950">Animation</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="autoRotateBtn" onclick="toggleAutoRotate()" class="rounded-md bg-ocean-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-ocean-950">Auto Rotate: ON</button>
+                        <button onclick="slowRotation()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Slow</button>
+                        <button onclick="normalRotation()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Normal</button>
+                        <button onclick="fastRotation()" class="rounded-md border border-ocean-300 bg-white px-3 py-1.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">Fast</button>
+                    </div>
                 </div>
-                <div class="info-item">
-                    <div class="info-label">Dimensions</div>
-                    <div class="info-value">CR80 Standard</div>
+
+                <!-- Lighting Controls -->
+                <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                    <h3 class="mb-4 text-sm font-medium text-ocean-950">Lighting</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="mb-2 flex items-center justify-between text-sm">
+                                <span class="text-ocean-950/70">Exposure</span>
+                                <span id="exposureValue" class="tabular-nums font-medium text-ocean-950">1.0</span>
+                            </label>
+                            <input type="range" id="exposureSlider" min="0.1" max="3.0" value="1.0" step="0.1" class="w-full accent-ocean-800">
+                        </div>
+                        <div>
+                            <label class="mb-2 flex items-center justify-between text-sm">
+                                <span class="text-ocean-950/70">Shadow</span>
+                                <span id="shadowValue" class="tabular-nums font-medium text-ocean-950">1.0</span>
+                            </label>
+                            <input type="range" id="shadowSlider" min="0" max="2" value="1" step="0.1" class="w-full accent-ocean-800">
+                        </div>
+                    </div>
                 </div>
-                <div class="info-item">
-                    <div class="info-label">Vertices</div>
-                    <div class="info-value" id="vertexCount">-</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Triangles</div>
-                    <div class="info-value" id="triangleCount">-</div>
+
+                <!-- File Info -->
+                <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
+                    <h3 class="mb-4 text-sm font-medium text-ocean-950">File Information</h3>
+                    <dl class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <dt class="text-ocean-950/60">File Size</dt>
+                            <dd id="fileSize" class="tabular-nums font-medium text-ocean-950">-</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-ocean-950/60">Format</dt>
+                            <dd class="font-medium text-ocean-950">GLB 2.0</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-ocean-950/60">Dimensions</dt>
+                            <dd class="font-medium text-ocean-950">CR80 Standard</dd>
+                        </div>
+                    </dl>
                 </div>
             </div>
-            
-            <div class="action-buttons">
-                <a href="#" class="action-btn" id="downloadBtn">📥 Download GLB</a>
-                <a href="/" class="action-btn secondary">🔄 Create New Card</a>
-                <button class="action-btn secondary" onclick="loadNewFile()">📂 Load Another File</button>
+
+            <!-- Actions -->
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <a href="#" id="downloadBtn" class="inline-flex items-center gap-2 rounded-md bg-ocean-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-ocean-950">
+                    <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                    Download GLB
+                </a>
+                <a href="/" class="inline-flex items-center gap-2 rounded-md border border-ocean-300 bg-white px-4 py-2.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">
+                    Create New Card
+                </a>
+                <button onclick="loadNewFile()" class="inline-flex items-center gap-2 rounded-md border border-ocean-300 bg-white px-4 py-2.5 text-sm font-medium text-ocean-950 hover:bg-ocean-100">
+                    Load Another File
+                </button>
             </div>
         </div>
-    </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-ocean-300 bg-white">
+        <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved.</p>
+        </div>
+    </footer>
 
     <script>
         let currentModel = null;
@@ -548,6 +278,15 @@ export function servePreview(sessionId = null) {
             modelViewer = document.getElementById('cardViewer');
             setupEventListeners();
             setupSliders();
+            
+            // Load gallery
+            loadGallery();
+            
+            // Setup modal viewer
+            const modalViewer = document.getElementById('modalViewer');
+            modalViewer.addEventListener('load', () => {
+                document.getElementById('modalLoading').classList.add('hidden');
+            });
             
             // Check if there's a session ID in URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -561,24 +300,17 @@ export function servePreview(sessionId = null) {
             const fileInput = document.getElementById('fileInput');
             const uploadArea = document.getElementById('uploadArea');
             
-            // File input change
             fileInput.addEventListener('change', handleFileSelect);
-            
-            // Upload area click
             uploadArea.addEventListener('click', () => fileInput.click());
-            
-            // Drag and drop
             uploadArea.addEventListener('dragover', handleDragOver);
             uploadArea.addEventListener('dragleave', handleDragLeave);
             uploadArea.addEventListener('drop', handleDrop);
             
-            // Model viewer events
             modelViewer.addEventListener('load', handleModelLoad);
             modelViewer.addEventListener('error', handleModelError);
         }
         
         function setupSliders() {
-            // FOV slider
             const fovSlider = document.getElementById('fovSlider');
             const fovValue = document.getElementById('fovValue');
             fovSlider.addEventListener('input', (e) => {
@@ -587,7 +319,6 @@ export function servePreview(sessionId = null) {
                 modelViewer.fieldOfView = value + 'deg';
             });
             
-            // Exposure slider
             const exposureSlider = document.getElementById('exposureSlider');
             const exposureValue = document.getElementById('exposureValue');
             exposureSlider.addEventListener('input', (e) => {
@@ -596,7 +327,6 @@ export function servePreview(sessionId = null) {
                 modelViewer.exposure = value;
             });
             
-            // Shadow slider
             const shadowSlider = document.getElementById('shadowSlider');
             const shadowValue = document.getElementById('shadowValue');
             shadowSlider.addEventListener('input', (e) => {
@@ -613,16 +343,16 @@ export function servePreview(sessionId = null) {
         
         function handleDragOver(event) {
             event.preventDefault();
-            event.currentTarget.classList.add('dragover');
+            event.currentTarget.classList.add('border-ocean-800', 'bg-ocean-100');
         }
         
         function handleDragLeave(event) {
-            event.currentTarget.classList.remove('dragover');
+            event.currentTarget.classList.remove('border-ocean-800', 'bg-ocean-100');
         }
         
         function handleDrop(event) {
             event.preventDefault();
-            event.currentTarget.classList.remove('dragover');
+            event.currentTarget.classList.remove('border-ocean-800', 'bg-ocean-100');
             
             const files = event.dataTransfer.files;
             if (files.length > 0) {
@@ -639,35 +369,37 @@ export function servePreview(sessionId = null) {
             const url = URL.createObjectURL(file);
             currentModel = { file, url };
             
-            // Update file info
             document.getElementById('fileSize').textContent = formatFileSize(file.size);
-            
-            // Show loading
             showLoading();
-            
-            // Load model
             modelViewer.src = url;
         }
         
         async function loadModelFromSession(sessionId) {
             try {
-                console.log('Loading model from session:', sessionId);
+                console.log('Loading model for session:', sessionId);
                 showLoading();
                 
                 const downloadUrl = '/api/download?sessionId=' + encodeURIComponent(sessionId);
                 console.log('Fetching from:', downloadUrl);
                 
                 const response = await fetch(downloadUrl);
-                console.log('Response status:', response.status, response.statusText);
+                console.log('Response status:', response.status);
                 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Download failed:', errorText);
-                    throw new Error('Failed to load model: ' + response.status + ' ' + response.statusText);
+                    // Try to get error message from response
+                    let errorMsg = 'Failed to load model: ' + response.status;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {}
+                    throw new Error(errorMsg);
                 }
                 
+                const contentType = response.headers.get('Content-Type');
+                console.log('Content-Type:', contentType);
+                
                 const blob = await response.blob();
-                console.log('Blob received, size:', blob.size, 'type:', blob.type);
+                console.log('Blob size:', blob.size);
                 
                 if (blob.size === 0) {
                     throw new Error('Received empty file from server');
@@ -678,28 +410,26 @@ export function servePreview(sessionId = null) {
                 
             } catch (error) {
                 console.error('Error loading model:', error);
-                alert('Failed to load model: ' + error.message);
                 hideLoading();
+                // Show error in UI instead of alert
+                document.getElementById('uploadSection').innerHTML = \`
+                    <div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+                        <svg class="mx-auto mb-4 size-12 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M12 8v4M12 16h.01" />
+                        </svg>
+                        <h3 class="mb-2 text-sm font-medium text-red-800">Failed to Load Model</h3>
+                        <p class="text-sm text-red-600">\${error.message}</p>
+                        <p class="mt-4 text-xs text-red-500">Session ID: \${sessionId}</p>
+                        <a href="/drive" class="mt-4 inline-block rounded bg-ocean-800 px-4 py-2 text-sm font-medium text-white hover:bg-ocean-950">Back to Drive</a>
+                    </div>
+                \`;
             }
         }
         
         function handleModelLoad() {
             hideLoading();
             showViewer();
-            
-            // Update model info
-            setTimeout(() => {
-                try {
-                    const model = modelViewer.model;
-                    if (model) {
-                        // These are approximate values as model-viewer doesn't expose detailed stats
-                        document.getElementById('vertexCount').textContent = '~380';
-                        document.getElementById('triangleCount').textContent = '~288';
-                    }
-                } catch (e) {
-                    console.log('Could not get model stats:', e);
-                }
-            }, 1000);
         }
         
         function handleModelError(event) {
@@ -709,17 +439,16 @@ export function servePreview(sessionId = null) {
         }
         
         function showLoading() {
-            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('loadingOverlay').classList.remove('hidden');
         }
         
         function hideLoading() {
-            document.getElementById('loadingOverlay').style.display = 'none';
+            document.getElementById('loadingOverlay').classList.add('hidden');
         }
         
         function showViewer() {
             document.getElementById('uploadSection').classList.add('hidden');
             document.getElementById('viewerSection').classList.remove('hidden');
-            document.getElementById('controlsPanel').classList.remove('hidden');
             
             if (currentModel) {
                 document.getElementById('downloadBtn').href = currentModel.url;
@@ -730,7 +459,6 @@ export function servePreview(sessionId = null) {
         function loadNewFile() {
             document.getElementById('uploadSection').classList.remove('hidden');
             document.getElementById('viewerSection').classList.add('hidden');
-            document.getElementById('controlsPanel').classList.add('hidden');
             
             if (currentModel && currentModel.url) {
                 URL.revokeObjectURL(currentModel.url);
@@ -740,7 +468,7 @@ export function servePreview(sessionId = null) {
             document.getElementById('fileInput').value = '';
         }
         
-        // Camera control functions
+        // Camera controls
         function resetCamera() {
             modelViewer.cameraTarget = '0 0 0';
             modelViewer.cameraOrbit = '0deg 75deg 8m';
@@ -764,16 +492,18 @@ export function servePreview(sessionId = null) {
         // Animation controls
         function toggleAutoRotate() {
             const btn = document.getElementById('autoRotateBtn');
-            const isActive = btn.classList.contains('active');
+            const isActive = modelViewer.autoRotate;
             
             if (isActive) {
                 modelViewer.autoRotate = false;
                 btn.textContent = 'Auto Rotate: OFF';
-                btn.classList.remove('active');
+                btn.classList.remove('bg-ocean-800', 'text-white');
+                btn.classList.add('bg-white', 'text-ocean-950', 'border', 'border-ocean-300');
             } else {
                 modelViewer.autoRotate = true;
                 btn.textContent = 'Auto Rotate: ON';
-                btn.classList.add('active');
+                btn.classList.add('bg-ocean-800', 'text-white');
+                btn.classList.remove('bg-white', 'text-ocean-950', 'border', 'border-ocean-300');
             }
         }
         
@@ -789,49 +519,6 @@ export function servePreview(sessionId = null) {
             modelViewer.rotationPerSecond = '60deg';
         }
         
-        // Display options
-        function toggleWireframe() {
-            // Note: wireframe mode isn't directly supported by model-viewer
-            // This is a placeholder for the button
-            const btn = document.getElementById('wireframeBtn');
-            alert('Wireframe mode is not available in this viewer version.');
-        }
-        
-        function toggleEnvironment() {
-            const current = modelViewer.environmentImage;
-            if (current === 'neutral') {
-                modelViewer.environmentImage = 'legacy';
-                modelViewer.skyboxImage = 'legacy';
-            } else {
-                modelViewer.environmentImage = 'neutral';
-                modelViewer.skyboxImage = 'neutral';
-            }
-        }
-        
-        function resetAll() {
-            // Reset camera
-            resetCamera();
-            
-            // Reset lighting
-            modelViewer.exposure = 1.0;
-            modelViewer.shadowIntensity = 1.0;
-            document.getElementById('exposureSlider').value = 1.0;
-            document.getElementById('shadowSlider').value = 1.0;
-            document.getElementById('exposureValue').textContent = '1.0';
-            document.getElementById('shadowValue').textContent = '1.0';
-            
-            // Reset animation
-            modelViewer.autoRotate = true;
-            modelViewer.rotationPerSecond = '30deg';
-            const btn = document.getElementById('autoRotateBtn');
-            btn.textContent = 'Auto Rotate: ON';
-            btn.classList.add('active');
-            
-            // Reset environment
-            modelViewer.environmentImage = 'neutral';
-            modelViewer.skyboxImage = 'neutral';
-        }
-        
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
             const k = 1024;
@@ -839,6 +526,156 @@ export function servePreview(sessionId = null) {
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
+        
+        // Gallery functions
+        let galleryData = [];
+        
+        async function loadGallery() {
+            const grid = document.getElementById('galleryGrid');
+            const countEl = document.getElementById('galleryCount');
+            
+            try {
+                const response = await fetch('/api/list-glbs');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load gallery');
+                }
+                
+                galleryData = data.sessions || [];
+                
+                if (galleryData.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full py-8 text-center text-sm text-ocean-950/60">No cards generated yet. <a href="/" class="text-ocean-800 hover:underline">Create your first card</a></div>';
+                    countEl.textContent = '';
+                    return;
+                }
+                
+                grid.innerHTML = galleryData.map((item, index) => \`
+                    <div class="group cursor-pointer" onclick="openModal('\${item.sessionId}', '\${escapeHtml(item.name)}', \${item.glbSize})">
+                        <div class="relative aspect-[3/4] overflow-hidden rounded-lg border border-ocean-200 bg-ocean-50 transition-all group-hover:border-ocean-600 group-hover:shadow-lg">
+                            <img 
+                                src="/api/thumbnail?sessionId=\${item.sessionId}" 
+                                alt="\${escapeHtml(item.name)}"
+                                class="h-full w-full object-cover"
+                                loading="lazy"
+                            >
+                            <div class="absolute inset-0 flex items-center justify-center bg-ocean-950/0 transition-colors group-hover:bg-ocean-950/40">
+                                <svg class="size-10 text-white opacity-0 transition-opacity group-hover:opacity-100" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                                    <path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="mt-2 truncate text-xs font-medium text-ocean-950">\${escapeHtml(item.name)}</p>
+                        <p class="text-xs text-ocean-950/50">\${formatFileSize(item.glbSize)} · \${formatDate(item.timestamp)}</p>
+                    </div>
+                \`).join('');
+                
+                countEl.textContent = \`\${galleryData.length} card\${galleryData.length === 1 ? '' : 's'} in gallery\`;
+                
+            } catch (error) {
+                console.error('Gallery load error:', error);
+                grid.innerHTML = '<div class="col-span-full py-8 text-center text-sm text-red-600">Failed to load gallery: ' + error.message + '</div>';
+            }
+        }
+        
+        function refreshGallery() {
+            const icon = document.getElementById('galleryRefreshIcon');
+            icon.classList.add('animate-spin');
+            
+            loadGallery().finally(() => {
+                icon.classList.remove('animate-spin');
+            });
+        }
+        
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
+            
+            return date.toLocaleDateString();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+        
+        // Modal functions
+        function openModal(sessionId, name, size) {
+            const modal = document.getElementById('glbModal');
+            const modalViewer = document.getElementById('modalViewer');
+            const modalLoading = document.getElementById('modalLoading');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalInfo = document.getElementById('modalInfo');
+            const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+            
+            modalTitle.textContent = name || 'Card Preview';
+            modalInfo.textContent = formatFileSize(size);
+            modalDownloadBtn.href = '/api/download?sessionId=' + sessionId;
+            modalDownloadBtn.download = (name || 'card') + '.glb';
+            
+            modalLoading.classList.remove('hidden');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // Load the GLB
+            fetch('/api/download?sessionId=' + sessionId)
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load model');
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    modalViewer.src = url;
+                })
+                .catch(error => {
+                    console.error('Modal load error:', error);
+                    modalLoading.innerHTML = '<p class="text-red-600">Failed to load model</p>';
+                });
+            
+            // Close on escape
+            document.addEventListener('keydown', handleEscapeKey);
+            
+            // Prevent body scroll
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('glbModal');
+            const modalViewer = document.getElementById('modalViewer');
+            
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            // Clear the viewer
+            modalViewer.src = '';
+            
+            // Remove escape listener
+            document.removeEventListener('keydown', handleEscapeKey);
+            
+            // Restore body scroll
+            document.body.style.overflow = '';
+        }
+        
+        function handleEscapeKey(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('glbModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'glbModal') {
+                closeModal();
+            }
+        });
     </script>
 </body>
 </html>`;

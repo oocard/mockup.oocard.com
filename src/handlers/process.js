@@ -4,7 +4,8 @@ import {
   processSVGOverlay, 
   compositeImages,
   validateImage,
-  imageBufferToDataURL
+  imageBufferToDataURL,
+  generateCopyrightSVG
 } from '../processing/imageProcessor.js';
 import { createWorkingGLB } from '../processing/workingGLBGenerator.js';
 
@@ -114,8 +115,14 @@ export async function processCard(request, env, corsHeaders) {
     const frontDataURL = imageBufferToDataURL(processedFront);
     const backDataURL = imageBufferToDataURL(processedBack);
     
+    // Prepare copyright text options
+    const copyrightOptions = session.copyrightEnabled ? {
+      enabled: true,
+      text: session.copyrightText || '© DESIGN COPYRIGHT 2026'
+    } : { enabled: false };
+    
     // Create working 3D card GLB
-    const glbData = await createWorkingGLB(frontDataURL, backDataURL);
+    const glbData = await createWorkingGLB(frontDataURL, backDataURL, copyrightOptions);
     
     // Store GLB file
     await env.R2_BUCKET.put(`${sessionId}/card.glb`, glbData, {

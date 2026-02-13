@@ -31,9 +31,10 @@ function initiateGoogleLogin(env, corsHeaders) {
   const clientId = env.GOOGLE_CLIENT_ID;
   const redirectUri = env.GOOGLE_REDIRECT_URI || 'https://3d-card-generator.oocard.workers.dev/api/google-auth?action=callback';
   
-  // OAuth 2.0 scopes for Google Drive API
+  // OAuth 2.0 scopes for Google Drive API (includes write access for uploading GLB files)
   const scopes = [
-    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/drive.file',  // Create/edit files created by this app
+    'https://www.googleapis.com/auth/drive',       // Full drive access for uploading to any folder
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile'
   ].join(' ');
