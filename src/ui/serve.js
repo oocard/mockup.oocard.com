@@ -1,5 +1,6 @@
 // Note: fs imports don't work in Cloudflare Workers
 // HTML is embedded directly in the function
+import { getHoloCardCSS, getHoloCardHTML, getHoloCardJS, getHoloOverlayCSS, getHoloOverlayHTML, getHoloOverlayHTMLClose, getHoloOverlayJS } from './holoCard.js';
 
 /**
  * Serve the HTML UI
@@ -41,6 +42,8 @@ export function serveUI() {
         .text-balance { text-wrap: balance; }
         .text-pretty { text-wrap: pretty; }
         model-viewer { width: 100%; height: 100%; background-color: transparent; --poster-color: transparent; --progress-bar-color: #0077b6; }
+        ${getHoloCardCSS()}
+        ${getHoloOverlayCSS()}
     </style>
 </head>
 <body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
@@ -213,6 +216,16 @@ export function serveUI() {
                         </button>
                     </div>
 
+                    <!-- Holographic Card Preview (shows on image select) -->
+                    <div id="holoPreviewSection" class="hidden space-y-3">
+                        <h3 class="text-sm font-medium text-ocean-950">Holo v1</h3>
+                        <div class="rounded-lg border border-ocean-300 bg-white shadow-sm overflow-hidden">
+                            <div class="relative h-[400px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
+                                ${getHoloCardHTML('upload')}
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Download Section -->
                     <div id="downloadSection" class="hidden space-y-4">
                         <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
@@ -258,21 +271,23 @@ export function serveUI() {
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Inline 3D Viewer -->
+                        <!-- 3D Viewer with holographic CSS overlay -->
+                        <h3 class="text-sm font-medium text-ocean-950">Model Viewer</h3>
                         <div class="rounded-lg border border-ocean-300 bg-white shadow-sm overflow-hidden">
                             <div class="relative h-[400px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
-                                <model-viewer
-                                    id="resultViewer"
-                                    camera-controls
-                                    touch-action="pan-y"
-                                    auto-rotate
-                                    auto-rotate-delay="500"
-                                    rotation-per-second="30deg"
-                                    shadow-intensity="1"
-                                    exposure="1"
-                                    style="width: 100%; height: 100%;">
-                                </model-viewer>
+                                ${getHoloOverlayHTML('result')}
+                                    <model-viewer
+                                        id="resultViewer"
+                                        camera-controls
+                                        touch-action="pan-y"
+                                        auto-rotate
+                                        auto-rotate-delay="500"
+                                        rotation-per-second="30deg"
+                                        shadow-intensity="1"
+                                        exposure="1"
+                                        style="width: 100%; height: 100%;">
+                                    </model-viewer>
+                                ${getHoloOverlayHTMLClose()}
                             </div>
                         </div>
 
@@ -285,12 +300,8 @@ export function serveUI() {
                                     <span class="text-sm text-ocean-950">Off</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="resultHoloMode" value="guilloche" class="accent-ocean-800" onchange="setResultHolo('guilloche')">
-                                    <span class="text-sm text-ocean-950">Guilloche</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="resultHoloMode" value="rainbow" class="accent-ocean-800" onchange="setResultHolo('rainbow')">
-                                    <span class="text-sm text-ocean-950">Rainbow Foil</span>
+                                    <input type="radio" name="resultHoloMode" value="hologram" class="accent-ocean-800" onchange="setResultHolo('hologram')">
+                                    <span class="text-sm text-ocean-950">Hologram</span>
                                 </label>
                             </div>
                             <div id="resultHoloIntensityGroup" class="mt-3 hidden">
@@ -354,12 +365,13 @@ export function serveUI() {
                 </div>
             </div>
         </div>
+
     </main>
 
     <!-- Footer -->
     <footer class="mt-auto border-t border-ocean-300 bg-white">
         <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved.</p>
+            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved. · v1.12 · ${new Date().toISOString().slice(0, 19)}Z</p>
         </div>
     </footer>
 
@@ -385,11 +397,13 @@ export function serveUI() {
         
         let currentSessionId = null;
         let currentDownloadUrl = null;
+        let holoFaceBlobUrl = null;
         let resultHoloMode = 'off';
         let resultHoloIntensity = 0.5;
         let origMaterialState = null;
         let whiteTexture = null;
         let guillocheThicknessTexture = null;
+        let noiseThicknessTexture = null;
 
         function eachMat(viewer, fn) {
             if (!viewer || !viewer.model) return;
@@ -398,7 +412,7 @@ export function serveUI() {
             if (mats[1]) fn(mats[1]);
         }
 
-        // Create a small white texture for full-surface iridescence
+        // Create a small white texture
         async function getWhiteTexture(viewer) {
             if (whiteTexture) return whiteTexture;
             const c = document.createElement('canvas');
@@ -408,6 +422,28 @@ export function serveUI() {
             ctx.fillRect(0, 0, 4, 4);
             whiteTexture = await viewer.createTexture(c.toDataURL('image/png'));
             return whiteTexture;
+        }
+
+
+
+        // Noise thickness texture — creates organic iridescence distribution
+        async function getNoiseThicknessTexture(viewer) {
+            if (noiseThicknessTexture) return noiseThicknessTexture;
+            const sz = 256;
+            const c = document.createElement('canvas');
+            c.width = sz; c.height = sz;
+            const ctx = c.getContext('2d');
+            const img = ctx.createImageData(sz, sz);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const v = Math.random() * 255;
+                img.data[i] = v;
+                img.data[i+1] = v;
+                img.data[i+2] = v;
+                img.data[i+3] = 255;
+            }
+            ctx.putImageData(img, 0, 0);
+            noiseThicknessTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            return noiseThicknessTexture;
         }
 
         // Cache the original guilloche thickness texture from the GLB
@@ -429,6 +465,7 @@ export function serveUI() {
                 intensityGroup.classList.add('hidden');
                 eachMat(viewer, mat => {
                     mat.setIridescenceFactor(0);
+                    mat.setEmissiveFactor([0, 0, 0]);
                     if (origMaterialState) {
                         mat.pbrMetallicRoughness.setBaseColorFactor(origMaterialState.baseColor);
                         mat.pbrMetallicRoughness.setMetallicFactor(origMaterialState.metallic);
@@ -453,38 +490,22 @@ export function serveUI() {
             cacheGuillocheTexture(viewer);
             const i = resultHoloIntensity;
             const wt = await getWhiteTexture(viewer);
+            const nt = await getNoiseThicknessTexture(viewer);
 
-            if (mode === 'guilloche') {
-                // Guilloche hologram: full-surface iridescence with guilloche
-                // creating different film thickness = different spectral angle
+            if (mode === 'hologram') {
                 eachMat(viewer, mat => {
-                    mat.pbrMetallicRoughness.setBaseColorFactor([0.35, 0.35, 0.35, 1.0]);
-                    mat.pbrMetallicRoughness.setMetallicFactor(1.0);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.0);
-                    mat.setIridescenceFactor(i);
-                    mat.setIridescenceIor(3.0);
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.7);
+                    mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
+                    mat.setIridescenceFactor(i * 0.15);
+                    mat.setIridescenceIor(1.2);
                     mat.setIridescenceThicknessMinimum(0);
-                    mat.setIridescenceThicknessMaximum(1200);
-                    // White mask = iridescence everywhere
+                    mat.setIridescenceThicknessMaximum(200);
                     if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
-                    // Guilloche thickness = pattern refracts at different angle to base
+                    // Combine guilloche pattern with noise for organic refractive look
                     if (guillocheThicknessTexture && mat.iridescenceThicknessTexture) {
                         mat.iridescenceThicknessTexture.setTexture(guillocheThicknessTexture);
                     }
-                });
-            } else if (mode === 'rainbow') {
-                // Rainbow foil: uniform iridescence, no pattern
-                eachMat(viewer, mat => {
-                    mat.pbrMetallicRoughness.setBaseColorFactor([0.35, 0.35, 0.35, 1.0]);
-                    mat.pbrMetallicRoughness.setMetallicFactor(1.0);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.0);
-                    mat.setIridescenceFactor(i);
-                    mat.setIridescenceIor(3.0);
-                    mat.setIridescenceThicknessMinimum(100);
-                    mat.setIridescenceThicknessMaximum(800);
-                    // White for both = uniform iridescence
-                    if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
-                    if (wt && mat.iridescenceThicknessTexture) mat.iridescenceThicknessTexture.setTexture(wt);
+                    mat.setEmissiveFactor([0, 0, 0]);
                 });
             }
         }
@@ -496,20 +517,26 @@ export function serveUI() {
                 viewer.addEventListener('load', async () => {
                     origMaterialState = null;
                     whiteTexture = null;
+                    rainbowTexture = null;
+                    guillocheRainbowTexture = null;
                     guillocheThicknessTexture = null;
                     if (resultHoloMode !== 'off') await setResultHolo(resultHoloMode);
                 });
             }
         });
 
-        // Intensity slider
+        // Intensity slider — controls both iridescence and emissive glow
         document.getElementById('resultHoloIntensitySlider').addEventListener('input', (e) => {
             resultHoloIntensity = parseInt(e.target.value) / 100;
             document.getElementById('resultHoloIntensityValue').textContent = e.target.value + '%';
             const viewer = document.getElementById('resultViewer');
+            const i = resultHoloIntensity;
             eachMat(viewer, mat => {
-                mat.setIridescenceFactor(resultHoloIntensity);
+                mat.setIridescenceFactor(i * 0.15);
+                mat.setEmissiveFactor([0, 0, 0]);
             });
+            const mvWrap = document.getElementById('oc-mv-wrap-result');
+            if (mvWrap) mvWrap.style.setProperty('--oc-card-opacity', i.toFixed(2));
         });
         
         // File input change handlers
@@ -526,7 +553,17 @@ export function serveUI() {
             }
         }
 
-        frontImage.addEventListener('change', () => updateFileButton(frontImage, frontButton, 'Choose front image'));
+        frontImage.addEventListener('change', () => {
+            updateFileButton(frontImage, frontButton, 'Choose front image');
+            // Update holo card face from selected file
+            const holoFace = document.getElementById('oc-holo-face-upload');
+            if (holoFace && frontImage.files.length > 0) {
+                if (holoFaceBlobUrl) URL.revokeObjectURL(holoFaceBlobUrl);
+                holoFaceBlobUrl = URL.createObjectURL(frontImage.files[0]);
+                holoFace.src = holoFaceBlobUrl;
+                document.getElementById('holoPreviewSection').classList.remove('hidden');
+            }
+        });
         backImage.addEventListener('change', () => updateFileButton(backImage, backButton, 'Choose back image'));
 
         // Load test images from R2
@@ -550,6 +587,14 @@ export function serveUI() {
                 };
                 setFiles(frontImage, fBlob, 'test-f.png', frontButton, 'Choose front image');
                 setFiles(backImage, bBlob, 'test-r.png', backButton, 'Choose back image');
+                // Update holo card face with test front image
+                const holoFaceTest = document.getElementById('oc-holo-face-upload');
+                if (holoFaceTest) {
+                    if (holoFaceBlobUrl) URL.revokeObjectURL(holoFaceBlobUrl);
+                    holoFaceBlobUrl = URL.createObjectURL(fBlob);
+                    holoFaceTest.src = holoFaceBlobUrl;
+                    document.getElementById('holoPreviewSection').classList.remove('hidden');
+                }
             } catch (err) {
                 showStatus('Failed to load test images: ' + err.message, 'error');
             }
@@ -713,6 +758,11 @@ export function serveUI() {
             document.querySelector('input[name="resultHoloMode"][value="off"]').checked = true;
             const resultViewer = document.getElementById('resultViewer');
             if (resultViewer) resultViewer.removeAttribute('src');
+            // Reset holo card face
+            if (holoFaceBlobUrl) { URL.revokeObjectURL(holoFaceBlobUrl); holoFaceBlobUrl = null; }
+            const holoFaceReset = document.getElementById('oc-holo-face-upload');
+            if (holoFaceReset) holoFaceReset.src = '';
+            document.getElementById('holoPreviewSection').classList.add('hidden');
         });
         
         // Helper functions
@@ -748,6 +798,8 @@ export function serveUI() {
             if (ms < 1000) return ms + ' ms';
             return (ms / 1000).toFixed(1) + ' s';
         }
+        ${getHoloCardJS('upload')}
+        ${getHoloOverlayJS('result')}
     </script>
 </body>
 </html>`;
@@ -879,7 +931,7 @@ export function serveTestPage() {
     <!-- Footer -->
     <footer class="mt-auto border-t border-ocean-300 bg-white">
         <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved.</p>
+            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved. · v1.12 · ${new Date().toISOString().slice(0, 19)}Z</p>
         </div>
     </footer>
 

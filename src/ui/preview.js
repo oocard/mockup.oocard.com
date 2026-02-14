@@ -1,3 +1,4 @@
+import { getHoloCardCSS, getHoloCardHTML, getHoloCardJS, getHoloOverlayCSS, getHoloOverlayHTML, getHoloOverlayHTMLClose, getHoloOverlayJS } from './holoCard.js';
 
 /**
  * Serve the card preview page with Google model-viewer
@@ -46,6 +47,8 @@ export function servePreview(sessionId = null) {
         }
 
         /* holographic iridescence uses KHR_materials_iridescence baked into GLB */
+        ${getHoloCardCSS()}
+        ${getHoloOverlayCSS()}
     </style>
 </head>
 <body class="min-h-dvh bg-ocean-100 font-sans text-ocean-950 antialiased">
@@ -154,25 +157,27 @@ export function servePreview(sessionId = null) {
 
         <!-- Viewer Section -->
         <div id="viewerSection" class="hidden space-y-6">
-            <!-- 3D Viewer -->
+            <!-- 3D Viewer with Holographic CSS Overlay -->
             <div class="overflow-hidden rounded-lg border border-ocean-300 bg-white shadow-sm">
                 <div class="relative h-[500px] bg-gradient-to-br from-ocean-100 to-ocean-300/50">
-                    <div id="loadingOverlay" class="absolute inset-0 z-10 flex items-center justify-center bg-white/90">
+                    <div id="loadingOverlay" class="absolute inset-0 z-20 flex items-center justify-center bg-white/90">
                         <div class="size-8 animate-spin rounded-full border-4 border-ocean-300 border-t-ocean-800"></div>
                     </div>
-                    <model-viewer
-                        id="cardViewer"
-                        camera-controls
-                        touch-action="pan-y"
-                        auto-rotate
-                        auto-rotate-delay="1000"
-                        rotation-per-second="30deg"
-                        shadow-intensity="1"
-                        shadow-softness="0.3"
-                        exposure="1"
-                        tone-mapping="neutral"
-                        environment-image="neutral">
-                    </model-viewer>
+                    ${getHoloOverlayHTML('viewer')}
+                        <model-viewer
+                            id="cardViewer"
+                            camera-controls
+                            touch-action="pan-y"
+                            auto-rotate
+                            auto-rotate-delay="1000"
+                            rotation-per-second="30deg"
+                            shadow-intensity="1"
+                            shadow-softness="0.3"
+                            exposure="1"
+                            tone-mapping="neutral"
+                            environment-image="neutral">
+                        </model-viewer>
+                    ${getHoloOverlayHTMLClose()}
                 </div>
             </div>
 
@@ -715,11 +720,13 @@ export function servePreview(sessionId = null) {
             }
         });
 
-        // ── Holographic Overlay System (KHR_materials_iridescence baked into GLB) ──
+        // ── Holographic Overlay System ──
         let holoMode = 'off';
         let holoIntensity = 0.5;
         let origMatState = null;
         let whiteTexture = null;
+        let rainbowTexture = null;
+        let guillocheRainbowTexture = null;
         let guillocheThicknessTexture = null;
 
         function getViewers() {
@@ -733,7 +740,6 @@ export function servePreview(sessionId = null) {
             if (mats[1]) fn(mats[1]);
         }
 
-        // Create a small white texture for full-surface iridescence
         async function getWhiteTexture(viewer) {
             if (whiteTexture) return whiteTexture;
             const c = document.createElement('canvas');
@@ -745,7 +751,51 @@ export function servePreview(sessionId = null) {
             return whiteTexture;
         }
 
-        // Cache the original guilloche thickness texture from the GLB
+        function drawMultiCycleRainbow(ctx, w, h, cycles) {
+            const img = ctx.createImageData(w, h);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const t = ((x / w + y / h) / 2) * cycles % 1;
+                    const hue = t * 360;
+                    const s = 1.0, l = 0.55;
+                    const c = (1 - Math.abs(2 * l - 1)) * s;
+                    const X = c * (1 - Math.abs((hue / 60) % 2 - 1));
+                    const m = l - c / 2;
+                    let r, g, b;
+                    if (hue < 60)       { r = c; g = X; b = 0; }
+                    else if (hue < 120) { r = X; g = c; b = 0; }
+                    else if (hue < 180) { r = 0; g = c; b = X; }
+                    else if (hue < 240) { r = 0; g = X; b = c; }
+                    else if (hue < 300) { r = X; g = 0; b = c; }
+                    else                { r = c; g = 0; b = X; }
+                    const idx = (y * w + x) * 4;
+                    img.data[idx]     = (r + m) * 255;
+                    img.data[idx + 1] = (g + m) * 255;
+                    img.data[idx + 2] = (b + m) * 255;
+                    img.data[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(img, 0, 0);
+        }
+
+        async function getRainbowTexture(viewer) {
+            if (rainbowTexture) return rainbowTexture;
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            drawMultiCycleRainbow(c.getContext('2d'), 512, 512, 2);
+            rainbowTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            return rainbowTexture;
+        }
+
+        async function getGuillocheRainbowTexture(viewer) {
+            if (guillocheRainbowTexture) return guillocheRainbowTexture;
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            drawMultiCycleRainbow(c.getContext('2d'), 512, 512, 4);
+            guillocheRainbowTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            return guillocheRainbowTexture;
+        }
+
         function cacheGuillocheTexture(viewer) {
             if (guillocheThicknessTexture) return;
             if (!viewer || !viewer.model) return;
@@ -764,6 +814,7 @@ export function servePreview(sessionId = null) {
                 intensityGroup.classList.add('hidden');
                 viewers.forEach(v => eachMat(v, mat => {
                     mat.setIridescenceFactor(0);
+                    mat.setEmissiveFactor([0, 0, 0]);
                     if (origMatState) {
                         mat.pbrMetallicRoughness.setBaseColorFactor(origMatState.baseColor);
                         mat.pbrMetallicRoughness.setMetallicFactor(origMatState.metallic);
@@ -787,39 +838,39 @@ export function servePreview(sessionId = null) {
 
             viewers.forEach(v => cacheGuillocheTexture(v));
             const mainV = viewers[0];
-            const wt = mainV ? await getWhiteTexture(mainV) : null;
+            if (!mainV) return;
+            const wt = await getWhiteTexture(mainV);
+            const rt = await getRainbowTexture(mainV);
+            const i = holoIntensity;
 
             if (mode === 'guilloche') {
-                // Guilloche hologram: full-surface iridescence with guilloche
-                // creating different film thickness = different spectral angle
+                const grt = await getGuillocheRainbowTexture(mainV);
                 viewers.forEach(v => eachMat(v, mat => {
-                    mat.pbrMetallicRoughness.setBaseColorFactor([0.35, 0.35, 0.35, 1.0]);
-                    mat.pbrMetallicRoughness.setMetallicFactor(1.0);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.0);
-                    mat.setIridescenceFactor(holoIntensity);
-                    mat.setIridescenceIor(3.0);
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.4);
+                    mat.pbrMetallicRoughness.setRoughnessFactor(0.2);
+                    mat.setIridescenceFactor(i);
+                    mat.setIridescenceIor(2.0);
                     mat.setIridescenceThicknessMinimum(0);
                     mat.setIridescenceThicknessMaximum(1200);
-                    // White mask = iridescence everywhere
                     if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
-                    // Guilloche thickness = pattern refracts at different angle to base
                     if (guillocheThicknessTexture && mat.iridescenceThicknessTexture) {
                         mat.iridescenceThicknessTexture.setTexture(guillocheThicknessTexture);
                     }
+                    mat.setEmissiveFactor([i * 1.5, i * 1.5, i * 1.5]);
+                    if (mat.emissiveTexture) mat.emissiveTexture.setTexture(grt);
                 }));
             } else if (mode === 'rainbow') {
-                // Rainbow foil: uniform iridescence, no pattern
                 viewers.forEach(v => eachMat(v, mat => {
-                    mat.pbrMetallicRoughness.setBaseColorFactor([0.35, 0.35, 0.35, 1.0]);
-                    mat.pbrMetallicRoughness.setMetallicFactor(1.0);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.0);
-                    mat.setIridescenceFactor(holoIntensity);
-                    mat.setIridescenceIor(3.0);
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.4);
+                    mat.pbrMetallicRoughness.setRoughnessFactor(0.2);
+                    mat.setIridescenceFactor(i);
+                    mat.setIridescenceIor(2.0);
                     mat.setIridescenceThicknessMinimum(100);
                     mat.setIridescenceThicknessMaximum(800);
-                    // White for both = uniform iridescence
                     if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
                     if (wt && mat.iridescenceThicknessTexture) mat.iridescenceThicknessTexture.setTexture(wt);
+                    mat.setEmissiveFactor([i * 1.2, i * 1.2, i * 1.2]);
+                    if (mat.emissiveTexture) mat.emissiveTexture.setTexture(rt);
                 }));
             }
         }
@@ -828,6 +879,8 @@ export function servePreview(sessionId = null) {
         function onViewerLoad() {
             origMatState = null;
             whiteTexture = null;
+            rainbowTexture = null;
+            guillocheRainbowTexture = null;
             guillocheThicknessTexture = null;
             if (holoMode !== 'off') setHoloMode(holoMode);
         }
@@ -838,10 +891,15 @@ export function servePreview(sessionId = null) {
         document.getElementById('holoIntensitySlider')?.addEventListener('input', (e) => {
             holoIntensity = parseInt(e.target.value) / 100;
             document.getElementById('holoIntensityValue').textContent = e.target.value + '%';
+            const i = holoIntensity;
+            const emF = holoMode === 'guilloche' ? i * 1.5 : i * 1.2;
             getViewers().forEach(v => eachMat(v, mat => {
-                mat.setIridescenceFactor(holoIntensity);
+                mat.setIridescenceFactor(i);
+                mat.setEmissiveFactor([emF, emF, emF]);
             }));
         });
+
+        ${getHoloOverlayJS('viewer')}
     </script>
 </body>
 </html>`;
