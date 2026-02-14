@@ -1,5 +1,5 @@
 import { generateCopyrightPNG, imageBufferToDataURL } from './imageProcessor.js';
-import { EMISSIVE_PLACEHOLDER_B64 } from '../assets/guillochePattern.js';
+import { EMISSIVE_PLACEHOLDER_B64, GUILLOCHE_PNG_B64 } from '../assets/guillochePattern.js';
 
 /**
  * Working GLB generator that creates valid glTF 2.0 files
@@ -32,9 +32,12 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
       edgeImageData = copyrightPNG;
     }
 
-    // 1x1 white PNG placeholder for emissive texture slot (enables runtime holographic overlay)
+    // 1x1 white PNG placeholder for emissive texture slot
     const emissiveImageData = base64ToArrayBuffer(EMISSIVE_PLACEHOLDER_B64);
-    
+
+    // Guilloche pattern PNG (512x323 grayscale) for iridescence textures
+    const guillocheImageData = base64ToArrayBuffer(GUILLOCHE_PNG_B64);
+
     // Create geometry data and get vertex counts
     const geometryData = createCardGeometry();
     const geometryBuffer = geometryData.buffer;
@@ -46,6 +49,7 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
     const backImageSize = backImageData.byteLength;
     const edgeImageSize = edgeImageData ? edgeImageData.byteLength : 0;
     const emissiveImageSize = emissiveImageData.byteLength;
+    const guillocheImageSize = guillocheImageData.byteLength;
 
     // Align to 4-byte boundaries
     const geometryAligned = alignTo4(geometrySize);
@@ -53,8 +57,9 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
     const backImageAligned = alignTo4(backImageSize);
     const edgeImageAligned = edgeImageData ? alignTo4(edgeImageSize) : 0;
     const emissiveImageAligned = alignTo4(emissiveImageSize);
+    const guillocheImageAligned = alignTo4(guillocheImageSize);
 
-    const totalBinarySize = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned + emissiveImageAligned;
+    const totalBinarySize = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned + emissiveImageAligned + guillocheImageAligned;
     
     // Create glTF JSON
     const gltf = {
@@ -62,6 +67,7 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
         "version": "2.0",
         "generator": "3D Card Generator v1.0"
       },
+      "extensionsUsed": ["KHR_materials_iridescence"],
       "scene": 0,
       "scenes": [
         {
@@ -109,6 +115,8 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
       "materials": (() => {
         // Emissive texture index: after front(0), back(1), and optionally edge(2)
         const emissiveTexIdx = edgeImageData ? 3 : 2;
+        // Guilloche texture index: after emissive
+        const guillocheTexIdx = emissiveTexIdx + 1;
         return [
           {
             "name": "Front Material",
@@ -119,6 +127,16 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
             },
             "emissiveFactor": [0.0, 0.0, 0.0],
             "emissiveTexture": { "index": emissiveTexIdx },
+            "extensions": {
+              "KHR_materials_iridescence": {
+                "iridescenceFactor": 0.0,
+                "iridescenceIor": 1.5,
+                "iridescenceTexture": { "index": emissiveTexIdx },
+                "iridescenceThicknessMinimum": 200,
+                "iridescenceThicknessMaximum": 550,
+                "iridescenceThicknessTexture": { "index": guillocheTexIdx }
+              }
+            },
             "doubleSided": true
           },
           {
@@ -130,6 +148,16 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
             },
             "emissiveFactor": [0.0, 0.0, 0.0],
             "emissiveTexture": { "index": emissiveTexIdx },
+            "extensions": {
+              "KHR_materials_iridescence": {
+                "iridescenceFactor": 0.0,
+                "iridescenceIor": 1.5,
+                "iridescenceTexture": { "index": emissiveTexIdx },
+                "iridescenceThicknessMinimum": 200,
+                "iridescenceThicknessMaximum": 550,
+                "iridescenceThicknessTexture": { "index": guillocheTexIdx }
+              }
+            },
             "doubleSided": true
           },
           edgeImageData ? {
@@ -163,13 +191,15 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
           { "source": 1, "sampler": 0 }
         ];
         if (edgeImageData) t.push({ "source": 2, "sampler": 1 });
-        // Emissive placeholder texture (source index = after other images)
+        // Emissive placeholder texture
         const emissiveSrcIdx = edgeImageData ? 3 : 2;
         t.push({ "source": emissiveSrcIdx, "sampler": 0 });
+        // Guilloche iridescence texture
+        t.push({ "source": emissiveSrcIdx + 1, "sampler": 0 });
         return t;
       })(),
       "images": (() => {
-        // bufferView indices: 0=geometry, 1=front, 2=back, 3=edge(opt), N=emissive
+        // bufferView indices: 0=geometry, 1=front, 2=back, 3=edge(opt), N=emissive, N+1=guilloche
         const imgs = [
           { "bufferView": 1, "mimeType": "image/png" },
           { "bufferView": 2, "mimeType": "image/png" }
@@ -177,6 +207,7 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
         if (edgeImageData) imgs.push({ "bufferView": 3, "mimeType": "image/png" });
         const emissiveBvIdx = edgeImageData ? 4 : 3;
         imgs.push({ "bufferView": emissiveBvIdx, "mimeType": "image/png" });
+        imgs.push({ "bufferView": emissiveBvIdx + 1, "mimeType": "image/png" });
         return imgs;
       })(),
       "accessors": createAccessors(geometryBuffer, frontVertexCount, frontIndexCount, backVertexCount, backIndexCount, edgeVertexCount, edgeIndexCount),
@@ -192,6 +223,8 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
           emissiveOffset += edgeImageAligned;
         }
         bvs.push({ "buffer": 0, "byteOffset": emissiveOffset, "byteLength": emissiveImageSize });
+        const guillocheOffset = emissiveOffset + emissiveImageAligned;
+        bvs.push({ "buffer": 0, "byteOffset": guillocheOffset, "byteLength": guillocheImageSize });
         return bvs;
       })(),
       "buffers": [
@@ -234,7 +267,11 @@ export async function createWorkingGLB(frontTextureData, backTextureData, copyri
     // Add emissive placeholder image
     const emissiveOffset = geometryAligned + frontImageAligned + backImageAligned + edgeImageAligned;
     binaryView.set(new Uint8Array(emissiveImageData), emissiveOffset);
-    
+
+    // Add guilloche iridescence texture
+    const guillocheBinOffset = emissiveOffset + emissiveImageAligned;
+    binaryView.set(new Uint8Array(guillocheImageData), guillocheBinOffset);
+
     // Create GLB file
     const glbSize = 12 + 8 + jsonPadded.byteLength + 8 + totalBinarySize;
     const glb = new ArrayBuffer(glbSize);

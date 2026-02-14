@@ -1,6 +1,6 @@
 # 3D Card Generator - OOCard
 
-A Cloudflare Workers application that transforms PNG card designs into 3D GLB models. Features Google Drive batch processing, copyright text embedding, and a gallery of generated cards.
+A Cloudflare Workers application that transforms PNG card designs into 3D GLB models with interactive holographic effects. Features Google Drive batch processing, copyright text embedding, and a gallery of generated cards.
 
 **Live URL**: https://mockup.oocard.com
 
@@ -10,7 +10,15 @@ A Cloudflare Workers application that transforms PNG card designs into 3D GLB mo
 - **CR80 Standard Cards**: Generates cards with ISO 7810 ID-1 dimensions (85.6mm × 53.98mm × 0.76mm)
 - **Rounded Corners**: Automatically applies 3.18mm corner radius per ISO standard
 - **GLB Export**: WordPress 3D viewer compatible format with embedded textures
-- **SVG Overlay Support**: Optional overlay for holographic or special effects
+- **Emissive Texture Slot**: GLB materials include a placeholder emissive texture for runtime holographic effects
+
+### Holographic Overlay
+- **Guilloche Pattern**: Classic security pattern (concentric rotated ellipses) rendered as an emissive texture on the card surface
+- **Rainbow Foil**: Uniform rainbow color cycling across the card material
+- **Camera-Reactive Colors**: Holographic hue shifts in real-time as the viewer rotates the card, driven by camera orbit theta
+- **Intensity Slider**: Adjustable effect strength (5%–100%)
+- **Material API Integration**: Effects applied directly to glTF materials via `<model-viewer>` — tracks card geometry, not screen space
+- **SVG-to-Texture Pipeline**: Guilloche SVG rendered to Canvas at card aspect ratio, converted to PNG data URI, then loaded as a model-viewer texture at runtime
 
 ### Copyright Text
 - **Edge Embedding**: Repeating copyright text rendered along all card edges
@@ -28,7 +36,7 @@ A Cloudflare Workers application that transforms PNG card designs into 3D GLB mo
 ### Gallery
 - **Thumbnail Grid**: Visual gallery of all generated cards
 - **Date Sorting**: Cards sorted by creation date
-- **Modal Viewer**: Click to view 3D model in fullscreen modal
+- **Modal Viewer**: Click to view 3D model in fullscreen modal with holographic controls
 - **Download**: Direct GLB download from gallery
 
 ## Quick Start
@@ -92,7 +100,12 @@ wrangler deploy --env production
 3. Select back image (PNG)
 4. Optionally enable copyright text
 5. Click "Generate 3D Card"
-6. Download the GLB file
+6. Use holographic controls to preview effects:
+   - **Off**: No overlay
+   - **Guilloche**: Security pattern overlay with rainbow color cycling
+   - **Rainbow Foil**: Solid rainbow tint that shifts with camera angle
+   - Adjust **intensity slider** to taste
+7. Download the GLB file
 
 ### Batch Processing (Google Drive)
 
@@ -141,24 +154,30 @@ For batch processing, images must be paired:
 
 ```
 ├── src/
-│   ├── index.js              # Main worker entry & routing
+│   ├── index.js                    # Main worker entry & routing
+│   ├── assets/
+│   │   ├── guillochePattern.js     # Guilloche SVG + emissive placeholder PNG
+│   │   └── holoTexture.js          # Holographic texture asset (base64)
 │   ├── handlers/
-│   │   ├── upload.js         # File upload handling
-│   │   ├── process.js        # 3D card generation
-│   │   ├── status.js         # Processing status
-│   │   ├── download.js       # GLB download & gallery API
-│   │   ├── googleAuth.js     # Google OAuth flow
-│   │   └── googleDrive.js    # Drive integration & batch
+│   │   ├── upload.js               # File upload handling
+│   │   ├── process.js              # 3D card generation
+│   │   ├── status.js               # Processing status
+│   │   ├── download.js             # GLB download & gallery API
+│   │   ├── googleAuth.js           # Google OAuth flow
+│   │   └── googleDrive.js          # Drive integration & batch
 │   ├── processing/
-│   │   ├── imageProcessor.js # Image processing & copyright PNG
-│   │   └── workingGLBGenerator.js # GLB file generation
+│   │   ├── imageProcessor.js       # Image processing & copyright PNG
+│   │   ├── workingGLBGenerator.js  # GLB file generation (with emissive slot)
+│   │   ├── cardGenerator.js        # Card generation orchestration
+│   │   └── simpleCardGenerator.js  # Simplified card generator
 │   ├── utils/
-│   │   └── helpers.js        # Utility functions
+│   │   └── helpers.js              # Utility functions
 │   └── ui/
-│       ├── serve.js          # Upload page UI
-│       ├── preview.js        # Preview & gallery UI
-│       └── googleDrive.js    # Drive integration UI
-├── wrangler.toml             # Cloudflare configuration
+│       ├── serve.js                # Upload page UI + holographic controls
+│       ├── preview.js              # Preview & gallery UI + holographic controls
+│       └── googleDrive.js          # Drive integration UI
+├── Guilloche.svg                   # Source Guilloche pattern (public domain)
+├── wrangler.toml                   # Cloudflare configuration
 └── package.json
 ```
 
@@ -185,6 +204,16 @@ For batch processing, images must be paired:
 - Embeds front/back textures as PNG
 - Optional edge texture with copyright text
 - Proper UV mapping for seamless texture tiling
+- Emissive texture slot: a 1x1 white PNG placeholder (69 bytes) is embedded in front/back materials so the browser can swap in holographic textures at runtime via `<model-viewer>` Materials API
+
+### Holographic Effect Pipeline
+1. **SVG Source**: Guilloche pattern stored as an SVG string (white strokes on transparent, 200x200 viewBox)
+2. **Canvas Render**: SVG rendered to an off-screen Canvas at 1024x646 (CR80 card aspect ratio) with black background
+3. **Texture Creation**: Canvas exported as PNG data URI, passed to `model-viewer.createTexture()`
+4. **Material Swap**: Runtime texture replaces the placeholder emissive texture via `emissiveTexture.setTexture()`
+5. **Color Cycling**: `camera-change` event drives HSL-to-RGB conversion — `emissiveFactor` is set to `[r * intensity * 2.5, g * intensity * 2.5, b * intensity * 2.5]` for vivid rainbow shifting
+6. **Subtle Tint**: `baseColorFactor` applies a complementary tint at 30% of the holographic intensity
+7. **Material Properties**: Metallic factor raised to 0.5, roughness lowered to 0.25 for reflective appearance
 
 ### Copyright Text Rendering
 - Pure JavaScript bitmap font (no Canvas API)

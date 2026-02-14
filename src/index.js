@@ -110,9 +110,21 @@ export default {
           return handleGoogleDrive(request, env, corsHeaders, ctx);
           
         default:
-          return new Response('Not Found', { 
-            status: 404, 
-            headers: corsHeaders 
+          // Serve static files from R2 (e.g. /static/test-f.png)
+          if (path.startsWith('/static/')) {
+            const key = path.slice(1); // strip leading /
+            const obj = await env.R2_BUCKET.get(key);
+            if (obj) {
+              const ext = key.split('.').pop().toLowerCase();
+              const types = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', glb: 'model/gltf-binary' };
+              return new Response(obj.body, {
+                headers: { ...corsHeaders, 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' }
+              });
+            }
+          }
+          return new Response('Not Found', {
+            status: 404,
+            headers: corsHeaders
           });
       }
     } catch (error) {
