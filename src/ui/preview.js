@@ -740,67 +740,92 @@ export function servePreview(sessionId = null) {
             return whiteTexture;
         }
 
+        // Helper: load + fully decode an image (mobile-safe)
+        async function loadImg(uri) {
+            var img = new Image();
+            await new Promise(function(res, rej) { img.onload = res; img.onerror = rej; img.src = uri; });
+            if (img.decode) await img.decode();
+            return img;
+        }
+
+        // Helper: canvas to model-viewer texture via blob (non-blocking on mobile)
+        async function canvasToTexture(viewer, canvas) {
+            var blob = await new Promise(function(res) { canvas.toBlob(res, 'image/png'); });
+            var url = URL.createObjectURL(blob);
+            try { return await viewer.createTexture(url); }
+            finally { URL.revokeObjectURL(url); }
+        }
+
+        // Helper: tile an image onto canvas (fallback when createPattern returns null)
+        function tileImage(ctx, img, sz) {
+            for (var y = 0; y < sz; y += img.height) {
+                for (var x = 0; x < sz; x += img.width) {
+                    ctx.drawImage(img, x, y);
+                }
+            }
+        }
+
         async function getMetafyTexture(viewer) {
             if (metafyTexture) return metafyTexture;
             try {
-                metafyTexture = await viewer.createTexture(METAFY_URI);
+                var img = await loadImg(METAFY_URI);
+                var c = document.createElement('canvas');
+                c.width = img.naturalWidth || 256; c.height = img.naturalHeight || 256;
+                c.getContext('2d').drawImage(img, 0, 0);
+                metafyTexture = await canvasToTexture(viewer, c);
             } catch (err) {
-                const img = new Image();
-                await new Promise(function(res) { img.onload = res; img.src = METAFY_URI; });
-                const c = document.createElement('canvas');
-                c.width = img.width || 256; c.height = img.height || 256;
-                const ctx = c.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                metafyTexture = await viewer.createTexture(c.toDataURL('image/png'));
+                metafyTexture = await getWhiteTexture(viewer);
             }
             return metafyTexture;
         }
 
-        // Composite: rainbow gradient masked by metafy pattern + grain noise
+        // Composite: rainbow gradient masked by metafy + grain noise
         async function getMetafyGrainTexture(viewer) {
             if (metafyGrainTexture) return metafyGrainTexture;
-            const sz = 512;
-            const c = document.createElement('canvas');
+            var sz = 512;
+            var c = document.createElement('canvas');
             c.width = sz; c.height = sz;
-            const ctx = c.getContext('2d');
+            var ctx = c.getContext('2d');
 
             // 1. Rainbow gradient (sunpillar colors from CodePen)
             var grad = ctx.createLinearGradient(0, 0, 0, sz);
-            var sunpillars = [
-                [255, 119, 115], [255, 224, 97], [157, 255, 97],
-                [133, 255, 245], [122, 143, 255], [200, 117, 255]
+            var sp = [
+                [255,119,115],[255,224,97],[157,255,97],
+                [133,255,245],[122,143,255],[200,117,255]
             ];
-            var cycles = 3;
-            for (var ci = 0; ci < cycles; ci++) {
+            for (var ci = 0; ci < 3; ci++) {
                 for (var si = 0; si <= 6; si++) {
-                    var col = sunpillars[si % 6];
-                    var stop = (ci * 7 + si) / (cycles * 7);
+                    var col = sp[si % 6];
+                    var stop = (ci * 7 + si) / 21;
                     if (stop <= 1) grad.addColorStop(stop, 'rgb(' + col[0] + ',' + col[1] + ',' + col[2] + ')');
                 }
             }
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, sz, sz);
 
-            // 2. Multiply metafy — masks rainbow to pattern shape
-            var metImg = new Image();
-            await new Promise(function(res) { metImg.onload = res; metImg.src = METAFY_URI; });
-            ctx.globalCompositeOperation = 'multiply';
-            var pat = ctx.createPattern(metImg, 'repeat');
-            ctx.fillStyle = pat;
-            ctx.fillRect(0, 0, sz, sz);
+            // 2. Multiply metafy pattern — masks rainbow to pattern shape
+            try {
+                var metImg = await loadImg(METAFY_URI);
+                ctx.globalCompositeOperation = 'multiply';
+                var pat = ctx.createPattern(metImg, 'repeat');
+                if (pat) { ctx.fillStyle = pat; ctx.fillRect(0, 0, sz, sz); }
+                else { tileImage(ctx, metImg, sz); }
+            } catch (e) { /* gradient-only fallback */ }
 
-            // 3. Overlay grain for noise
-            var grainImg = new Image();
-            await new Promise(function(res) { grainImg.onload = res; grainImg.src = GRAIN_URI; });
-            ctx.globalAlpha = 0.4;
-            ctx.globalCompositeOperation = 'overlay';
-            var gPat = ctx.createPattern(grainImg, 'repeat');
-            ctx.fillStyle = gPat;
-            ctx.fillRect(0, 0, sz, sz);
+            // 3. Overlay grain noise
+            try {
+                var grainImg = await loadImg(GRAIN_URI);
+                ctx.globalAlpha = 0.4;
+                ctx.globalCompositeOperation = 'overlay';
+                var gPat = ctx.createPattern(grainImg, 'repeat');
+                if (gPat) { ctx.fillStyle = gPat; ctx.fillRect(0, 0, sz, sz); }
+                else { tileImage(ctx, grainImg, sz); }
+            } catch (e) { /* no grain fallback */ }
+
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
 
-            metafyGrainTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            metafyGrainTexture = await canvasToTexture(viewer, c);
             return metafyGrainTexture;
         }
 
