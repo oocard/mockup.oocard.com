@@ -1,6 +1,6 @@
 // Note: fs imports don't work in Cloudflare Workers
 // HTML is embedded directly in the function
-import { getHoloCardCSS, getHoloCardHTML, getHoloCardJS, getHoloOverlayCSS, getHoloOverlayHTML, getHoloOverlayHTMLClose, getHoloOverlayJS } from './holoCard.js';
+import { getHoloCardCSS, getHoloCardHTML, getHoloCardJS, getHoloOverlayCSS, getHoloOverlayHTML, getHoloOverlayHTMLClose, getHoloOverlayJS, getMetafyDataUri, getGrainDataUri } from './holoCard.js';
 
 /**
  * Serve the HTML UI
@@ -284,7 +284,7 @@ export function serveUI() {
                                         auto-rotate-delay="500"
                                         rotation-per-second="30deg"
                                         shadow-intensity="1"
-                                        exposure="1"
+                                        exposure="1.3"
                                         style="width: 100%; height: 100%;">
                                     </model-viewer>
                                 ${getHoloOverlayHTMLClose()}
@@ -371,7 +371,7 @@ export function serveUI() {
     <!-- Footer -->
     <footer class="mt-auto border-t border-ocean-300 bg-white">
         <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved. · v1.12 · ${new Date().toISOString().slice(0, 19)}Z</p>
+            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved. · v1.22 · ${new Date().toISOString().slice(0, 19)}Z</p>
         </div>
     </footer>
 
@@ -403,7 +403,10 @@ export function serveUI() {
         let origMaterialState = null;
         let whiteTexture = null;
         let guillocheThicknessTexture = null;
-        let noiseThicknessTexture = null;
+        let metafyTexture = null;
+        let metafyGrainTexture = null;
+        const METAFY_URI = '${getMetafyDataUri()}';
+        const GRAIN_URI = '${getGrainDataUri()}';
 
         function eachMat(viewer, fn) {
             if (!viewer || !viewer.model) return;
@@ -426,24 +429,77 @@ export function serveUI() {
 
 
 
-        // Noise thickness texture — creates organic iridescence distribution
-        async function getNoiseThicknessTexture(viewer) {
-            if (noiseThicknessTexture) return noiseThicknessTexture;
-            const sz = 256;
+
+        // Load metafy pattern directly as a model-viewer texture
+        async function getMetafyTexture(viewer) {
+            if (metafyTexture) return metafyTexture;
+            try {
+                metafyTexture = await viewer.createTexture(METAFY_URI);
+            } catch (err) {
+                // Fallback: draw metafy onto canvas
+                const img = new Image();
+                await new Promise(function(res) { img.onload = res; img.src = METAFY_URI; });
+                const c = document.createElement('canvas');
+                c.width = img.width || 256; c.height = img.height || 256;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                metafyTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            }
+            return metafyTexture;
+        }
+
+        // Composite: metafy pattern + grain noise for organic holographic thickness
+        // Composite: rainbow gradient masked by metafy pattern + grain noise
+        // Matches simeydotme CodePen sunpillar colors through metafy stencil
+        async function getMetafyGrainTexture(viewer) {
+            if (metafyGrainTexture) return metafyGrainTexture;
+            const sz = 512;
             const c = document.createElement('canvas');
             c.width = sz; c.height = sz;
             const ctx = c.getContext('2d');
-            const img = ctx.createImageData(sz, sz);
-            for (let i = 0; i < img.data.length; i += 4) {
-                const v = Math.random() * 255;
-                img.data[i] = v;
-                img.data[i+1] = v;
-                img.data[i+2] = v;
-                img.data[i+3] = 255;
+
+            // 1. Draw repeating rainbow gradient (sunpillar colors from CodePen)
+            const grad = ctx.createLinearGradient(0, 0, 0, sz);
+            var sunpillars = [
+                [255, 119, 115],  // hsl(2, 100%, 73%)   red/coral
+                [255, 224, 97],   // hsl(53, 100%, 69%)  yellow
+                [157, 255, 97],   // hsl(93, 100%, 69%)  green
+                [133, 255, 245],  // hsl(176, 100%, 76%) cyan
+                [122, 143, 255],  // hsl(228, 100%, 74%) blue
+                [200, 117, 255]   // hsl(283, 100%, 73%) purple
+            ];
+            var cycles = 3;
+            for (var ci = 0; ci < cycles; ci++) {
+                for (var si = 0; si <= 6; si++) {
+                    var col = sunpillars[si % 6];
+                    var stop = (ci * 7 + si) / (cycles * 7);
+                    if (stop <= 1) grad.addColorStop(stop, 'rgb(' + col[0] + ',' + col[1] + ',' + col[2] + ')');
+                }
             }
-            ctx.putImageData(img, 0, 0);
-            noiseThicknessTexture = await viewer.createTexture(c.toDataURL('image/png'));
-            return noiseThicknessTexture;
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, sz, sz);
+
+            // 2. Multiply metafy pattern on top — masks rainbow to pattern shape
+            var metImg = new Image();
+            await new Promise(function(res) { metImg.onload = res; metImg.src = METAFY_URI; });
+            ctx.globalCompositeOperation = 'multiply';
+            var pat = ctx.createPattern(metImg, 'repeat');
+            ctx.fillStyle = pat;
+            ctx.fillRect(0, 0, sz, sz);
+
+            // 3. Overlay grain noise for texture
+            var grainImg = new Image();
+            await new Promise(function(res) { grainImg.onload = res; grainImg.src = GRAIN_URI; });
+            ctx.globalAlpha = 0.4;
+            ctx.globalCompositeOperation = 'overlay';
+            var gPat = ctx.createPattern(grainImg, 'repeat');
+            ctx.fillStyle = gPat;
+            ctx.fillRect(0, 0, sz, sz);
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'source-over';
+
+            metafyGrainTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            return metafyGrainTexture;
         }
 
         // Cache the original guilloche thickness texture from the GLB
@@ -490,22 +546,26 @@ export function serveUI() {
             cacheGuillocheTexture(viewer);
             const i = resultHoloIntensity;
             const wt = await getWhiteTexture(viewer);
-            const nt = await getNoiseThicknessTexture(viewer);
+            const mt = await getMetafyTexture(viewer);
 
             if (mode === 'hologram') {
+                const mgt = await getMetafyGrainTexture(viewer);
                 eachMat(viewer, mat => {
-                    mat.pbrMetallicRoughness.setMetallicFactor(0.7);
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.3);
                     mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
-                    mat.setIridescenceFactor(i * 0.15);
-                    mat.setIridescenceIor(1.2);
-                    mat.setIridescenceThicknessMinimum(0);
-                    mat.setIridescenceThicknessMaximum(200);
-                    if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
-                    // Combine guilloche pattern with noise for organic refractive look
-                    if (guillocheThicknessTexture && mat.iridescenceThicknessTexture) {
-                        mat.iridescenceThicknessTexture.setTexture(guillocheThicknessTexture);
+                    // Iridescence masked to overlay — shifts with viewing angle
+                    mat.setIridescenceFactor(i * 0.4);
+                    mat.setIridescenceIor(1.5);
+                    mat.setIridescenceThicknessMinimum(100);
+                    mat.setIridescenceThicknessMaximum(400);
+                    // Overlay pattern as iridescence mask — only pattern areas shimmer
+                    if (mgt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(mgt);
+                    if (mgt && mat.iridescenceThicknessTexture) mat.iridescenceThicknessTexture.setTexture(mgt);
+                    // Rainbow+metafy+grain composite as emissive — base spectrum colors
+                    if (mgt && mat.emissiveTexture) {
+                        mat.emissiveTexture.setTexture(mgt);
                     }
-                    mat.setEmissiveFactor([0, 0, 0]);
+                    mat.setEmissiveFactor([i * 0.5, i * 0.5, i * 0.5]);
                 });
             }
         }
@@ -517,8 +577,8 @@ export function serveUI() {
                 viewer.addEventListener('load', async () => {
                     origMaterialState = null;
                     whiteTexture = null;
-                    rainbowTexture = null;
-                    guillocheRainbowTexture = null;
+                    metafyTexture = null;
+                    metafyGrainTexture = null;
                     guillocheThicknessTexture = null;
                     if (resultHoloMode !== 'off') await setResultHolo(resultHoloMode);
                 });
@@ -532,11 +592,9 @@ export function serveUI() {
             const viewer = document.getElementById('resultViewer');
             const i = resultHoloIntensity;
             eachMat(viewer, mat => {
-                mat.setIridescenceFactor(i * 0.15);
-                mat.setEmissiveFactor([0, 0, 0]);
+                mat.setIridescenceFactor(i * 0.4);
+                mat.setEmissiveFactor([i * 0.5, i * 0.5, i * 0.5]);
             });
-            const mvWrap = document.getElementById('oc-mv-wrap-result');
-            if (mvWrap) mvWrap.style.setProperty('--oc-card-opacity', i.toFixed(2));
         });
         
         // File input change handlers
@@ -931,7 +989,7 @@ export function serveTestPage() {
     <!-- Footer -->
     <footer class="mt-auto border-t border-ocean-300 bg-white">
         <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved. · v1.12 · ${new Date().toISOString().slice(0, 19)}Z</p>
+            <p class="text-center text-sm text-ocean-950/60">© 2026 OOCard. All rights reserved. · v1.22 · ${new Date().toISOString().slice(0, 19)}Z</p>
         </div>
     </footer>
 

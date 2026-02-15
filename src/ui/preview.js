@@ -1,4 +1,4 @@
-import { getHoloCardCSS, getHoloCardHTML, getHoloCardJS, getHoloOverlayCSS, getHoloOverlayHTML, getHoloOverlayHTMLClose, getHoloOverlayJS } from './holoCard.js';
+import { getHoloCardCSS, getHoloCardHTML, getHoloCardJS, getHoloOverlayCSS, getHoloOverlayHTML, getHoloOverlayHTMLClose, getHoloOverlayJS, getMetafyDataUri, getGrainDataUri } from './holoCard.js';
 
 /**
  * Serve the card preview page with Google model-viewer
@@ -141,7 +141,7 @@ export function servePreview(sessionId = null) {
                         touch-action="pan-y"
                         auto-rotate
                         shadow-intensity="1"
-                        exposure="1"
+                        exposure="1.3"
                         style="width: 100%; height: 100%;">
                     </model-viewer>
                 </div>
@@ -173,7 +173,7 @@ export function servePreview(sessionId = null) {
                             rotation-per-second="30deg"
                             shadow-intensity="1"
                             shadow-softness="0.3"
-                            exposure="1"
+                            exposure="1.3"
                             tone-mapping="neutral"
                             environment-image="neutral">
                         </model-viewer>
@@ -236,27 +236,14 @@ export function servePreview(sessionId = null) {
                 <!-- Holographic Overlay -->
                 <div class="rounded-lg border border-ocean-300 bg-white p-6 shadow-sm">
                     <h3 class="mb-4 text-sm font-medium text-ocean-950">Holographic Overlay</h3>
-                    <div class="space-y-3">
-                        <label class="flex items-center gap-3 cursor-pointer">
+                    <div class="flex flex-wrap gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer">
                             <input type="radio" name="holoMode" value="off" checked class="accent-ocean-800" onchange="setHoloMode('off')">
-                            <div>
-                                <span class="text-sm font-medium text-ocean-950">Off</span>
-                                <p class="text-xs text-ocean-950/60">No holographic effect</p>
-                            </div>
+                            <span class="text-sm text-ocean-950">Off</span>
                         </label>
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="radio" name="holoMode" value="guilloche" class="accent-ocean-800" onchange="setHoloMode('guilloche')">
-                            <div>
-                                <span class="text-sm font-medium text-ocean-950">Guilloche</span>
-                                <p class="text-xs text-ocean-950/60">Security pattern with rainbow holo effect</p>
-                            </div>
-                        </label>
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="radio" name="holoMode" value="rainbow" class="accent-ocean-800" onchange="setHoloMode('rainbow')">
-                            <div>
-                                <span class="text-sm font-medium text-ocean-950">Rainbow Foil</span>
-                                <p class="text-xs text-ocean-950/60">Iridescent rainbow shimmer</p>
-                            </div>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="holoMode" value="hologram" class="accent-ocean-800" onchange="setHoloMode('hologram')">
+                            <span class="text-sm text-ocean-950">Hologram</span>
                         </label>
                     </div>
                     <div id="holoIntensityGroup" class="mt-4 hidden">
@@ -725,9 +712,11 @@ export function servePreview(sessionId = null) {
         let holoIntensity = 0.5;
         let origMatState = null;
         let whiteTexture = null;
-        let rainbowTexture = null;
-        let guillocheRainbowTexture = null;
+        let metafyTexture = null;
+        let metafyGrainTexture = null;
         let guillocheThicknessTexture = null;
+        const METAFY_URI = '${getMetafyDataUri()}';
+        const GRAIN_URI = '${getGrainDataUri()}';
 
         function getViewers() {
             return [document.getElementById('cardViewer'), document.getElementById('modalViewer')].filter(Boolean);
@@ -751,49 +740,68 @@ export function servePreview(sessionId = null) {
             return whiteTexture;
         }
 
-        function drawMultiCycleRainbow(ctx, w, h, cycles) {
-            const img = ctx.createImageData(w, h);
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const t = ((x / w + y / h) / 2) * cycles % 1;
-                    const hue = t * 360;
-                    const s = 1.0, l = 0.55;
-                    const c = (1 - Math.abs(2 * l - 1)) * s;
-                    const X = c * (1 - Math.abs((hue / 60) % 2 - 1));
-                    const m = l - c / 2;
-                    let r, g, b;
-                    if (hue < 60)       { r = c; g = X; b = 0; }
-                    else if (hue < 120) { r = X; g = c; b = 0; }
-                    else if (hue < 180) { r = 0; g = c; b = X; }
-                    else if (hue < 240) { r = 0; g = X; b = c; }
-                    else if (hue < 300) { r = X; g = 0; b = c; }
-                    else                { r = c; g = 0; b = X; }
-                    const idx = (y * w + x) * 4;
-                    img.data[idx]     = (r + m) * 255;
-                    img.data[idx + 1] = (g + m) * 255;
-                    img.data[idx + 2] = (b + m) * 255;
-                    img.data[idx + 3] = 255;
+        async function getMetafyTexture(viewer) {
+            if (metafyTexture) return metafyTexture;
+            try {
+                metafyTexture = await viewer.createTexture(METAFY_URI);
+            } catch (err) {
+                const img = new Image();
+                await new Promise(function(res) { img.onload = res; img.src = METAFY_URI; });
+                const c = document.createElement('canvas');
+                c.width = img.width || 256; c.height = img.height || 256;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                metafyTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            }
+            return metafyTexture;
+        }
+
+        // Composite: rainbow gradient masked by metafy pattern + grain noise
+        async function getMetafyGrainTexture(viewer) {
+            if (metafyGrainTexture) return metafyGrainTexture;
+            const sz = 512;
+            const c = document.createElement('canvas');
+            c.width = sz; c.height = sz;
+            const ctx = c.getContext('2d');
+
+            // 1. Rainbow gradient (sunpillar colors from CodePen)
+            var grad = ctx.createLinearGradient(0, 0, 0, sz);
+            var sunpillars = [
+                [255, 119, 115], [255, 224, 97], [157, 255, 97],
+                [133, 255, 245], [122, 143, 255], [200, 117, 255]
+            ];
+            var cycles = 3;
+            for (var ci = 0; ci < cycles; ci++) {
+                for (var si = 0; si <= 6; si++) {
+                    var col = sunpillars[si % 6];
+                    var stop = (ci * 7 + si) / (cycles * 7);
+                    if (stop <= 1) grad.addColorStop(stop, 'rgb(' + col[0] + ',' + col[1] + ',' + col[2] + ')');
                 }
             }
-            ctx.putImageData(img, 0, 0);
-        }
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, sz, sz);
 
-        async function getRainbowTexture(viewer) {
-            if (rainbowTexture) return rainbowTexture;
-            const c = document.createElement('canvas');
-            c.width = 512; c.height = 512;
-            drawMultiCycleRainbow(c.getContext('2d'), 512, 512, 2);
-            rainbowTexture = await viewer.createTexture(c.toDataURL('image/png'));
-            return rainbowTexture;
-        }
+            // 2. Multiply metafy — masks rainbow to pattern shape
+            var metImg = new Image();
+            await new Promise(function(res) { metImg.onload = res; metImg.src = METAFY_URI; });
+            ctx.globalCompositeOperation = 'multiply';
+            var pat = ctx.createPattern(metImg, 'repeat');
+            ctx.fillStyle = pat;
+            ctx.fillRect(0, 0, sz, sz);
 
-        async function getGuillocheRainbowTexture(viewer) {
-            if (guillocheRainbowTexture) return guillocheRainbowTexture;
-            const c = document.createElement('canvas');
-            c.width = 512; c.height = 512;
-            drawMultiCycleRainbow(c.getContext('2d'), 512, 512, 4);
-            guillocheRainbowTexture = await viewer.createTexture(c.toDataURL('image/png'));
-            return guillocheRainbowTexture;
+            // 3. Overlay grain for noise
+            var grainImg = new Image();
+            await new Promise(function(res) { grainImg.onload = res; grainImg.src = GRAIN_URI; });
+            ctx.globalAlpha = 0.4;
+            ctx.globalCompositeOperation = 'overlay';
+            var gPat = ctx.createPattern(grainImg, 'repeat');
+            ctx.fillStyle = gPat;
+            ctx.fillRect(0, 0, sz, sz);
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'source-over';
+
+            metafyGrainTexture = await viewer.createTexture(c.toDataURL('image/png'));
+            return metafyGrainTexture;
         }
 
         function cacheGuillocheTexture(viewer) {
@@ -840,37 +848,23 @@ export function servePreview(sessionId = null) {
             const mainV = viewers[0];
             if (!mainV) return;
             const wt = await getWhiteTexture(mainV);
-            const rt = await getRainbowTexture(mainV);
             const i = holoIntensity;
 
-            if (mode === 'guilloche') {
-                const grt = await getGuillocheRainbowTexture(mainV);
+            if (mode === 'hologram') {
+                const mgt = await getMetafyGrainTexture(mainV);
                 viewers.forEach(v => eachMat(v, mat => {
-                    mat.pbrMetallicRoughness.setMetallicFactor(0.4);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.2);
-                    mat.setIridescenceFactor(i);
-                    mat.setIridescenceIor(2.0);
-                    mat.setIridescenceThicknessMinimum(0);
-                    mat.setIridescenceThicknessMaximum(1200);
-                    if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
-                    if (guillocheThicknessTexture && mat.iridescenceThicknessTexture) {
-                        mat.iridescenceThicknessTexture.setTexture(guillocheThicknessTexture);
-                    }
-                    mat.setEmissiveFactor([i * 1.5, i * 1.5, i * 1.5]);
-                    if (mat.emissiveTexture) mat.emissiveTexture.setTexture(grt);
-                }));
-            } else if (mode === 'rainbow') {
-                viewers.forEach(v => eachMat(v, mat => {
-                    mat.pbrMetallicRoughness.setMetallicFactor(0.4);
-                    mat.pbrMetallicRoughness.setRoughnessFactor(0.2);
-                    mat.setIridescenceFactor(i);
-                    mat.setIridescenceIor(2.0);
+                    mat.pbrMetallicRoughness.setMetallicFactor(0.3);
+                    mat.pbrMetallicRoughness.setRoughnessFactor(0.4);
+                    mat.setIridescenceFactor(i * 0.4);
+                    mat.setIridescenceIor(1.5);
                     mat.setIridescenceThicknessMinimum(100);
-                    mat.setIridescenceThicknessMaximum(800);
-                    if (wt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(wt);
-                    if (wt && mat.iridescenceThicknessTexture) mat.iridescenceThicknessTexture.setTexture(wt);
-                    mat.setEmissiveFactor([i * 1.2, i * 1.2, i * 1.2]);
-                    if (mat.emissiveTexture) mat.emissiveTexture.setTexture(rt);
+                    mat.setIridescenceThicknessMaximum(400);
+                    if (mgt && mat.iridescenceTexture) mat.iridescenceTexture.setTexture(mgt);
+                    if (mgt && mat.iridescenceThicknessTexture) mat.iridescenceThicknessTexture.setTexture(mgt);
+                    if (mgt && mat.emissiveTexture) {
+                        mat.emissiveTexture.setTexture(mgt);
+                    }
+                    mat.setEmissiveFactor([i * 0.5, i * 0.5, i * 0.5]);
                 }));
             }
         }
@@ -879,8 +873,8 @@ export function servePreview(sessionId = null) {
         function onViewerLoad() {
             origMatState = null;
             whiteTexture = null;
-            rainbowTexture = null;
-            guillocheRainbowTexture = null;
+            metafyTexture = null;
+            metafyGrainTexture = null;
             guillocheThicknessTexture = null;
             if (holoMode !== 'off') setHoloMode(holoMode);
         }
@@ -892,10 +886,9 @@ export function servePreview(sessionId = null) {
             holoIntensity = parseInt(e.target.value) / 100;
             document.getElementById('holoIntensityValue').textContent = e.target.value + '%';
             const i = holoIntensity;
-            const emF = holoMode === 'guilloche' ? i * 1.5 : i * 1.2;
             getViewers().forEach(v => eachMat(v, mat => {
-                mat.setIridescenceFactor(i);
-                mat.setEmissiveFactor([emF, emF, emF]);
+                mat.setIridescenceFactor(i * 0.4);
+                mat.setEmissiveFactor([i * 0.5, i * 0.5, i * 0.5]);
             }));
         });
 

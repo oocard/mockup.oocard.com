@@ -8,6 +8,9 @@ import { HOLO_GRAIN_B64, HOLO_METAFY_B64 } from '../assets/holoCardAssets.js';
 const grainDataUri = `data:image/webp;base64,${HOLO_GRAIN_B64}`;
 const metafyDataUri = `data:image/png;base64,${HOLO_METAFY_B64}`;
 
+export function getMetafyDataUri() { return metafyDataUri; }
+export function getGrainDataUri() { return grainDataUri; }
+
 /**
  * Scoped CSS for the holographic card effect.
  * Uses .oc-holo-* namespace and oc-holo-* keyframe names.
@@ -417,65 +420,8 @@ export function getHoloCardJS(instanceId) {
  */
 export function getHoloOverlayCSS() {
   return `
-/* ── Model-Viewer Holographic Overlay ── */
-.oc-mv-holo-wrap {
-  --oc-pointer-x: 50%;
-  --oc-pointer-y: 50%;
-  --oc-pointer-from-center: 0;
-  --oc-card-opacity: 0;
-
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.oc-mv-holo-wrap:hover,
-.oc-mv-holo-wrap.oc-active {
-  --oc-card-opacity: 1;
-}
-
-/* Overlay — just a subtle cursor-tracking glare.
-   No rainbow gradients, no metafy mask.
-   Model-viewer iridescence handles the spectrum effect. */
-.oc-mv-overlay {
-  display: none;
-}
-
-.oc-mv-overlay .oc-mv-glare {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(
-      farthest-corner circle at var(--oc-pointer-x) var(--oc-pointer-y),
-      hsla(0, 0%, 100%, calc(0.2 * var(--oc-card-opacity))) 0%,
-      hsla(0, 0%, 100%, calc(0.08 * var(--oc-card-opacity))) 35%,
-      transparent 70%
-    );
-  mix-blend-mode: overlay;
-  pointer-events: none;
-}
-
-.oc-mv-overlay .oc-mv-grain {
-  position: absolute;
-  inset: 0;
-  background-image: url(${grainDataUri});
-  background-size: 220px 220px;
-  background-repeat: repeat;
-  opacity: calc(0.08 * var(--oc-card-opacity));
-  mix-blend-mode: overlay;
-  pointer-events: none;
-}
-
-.oc-mv-overlay .oc-mv-metafy {
-  position: absolute;
-  inset: 0;
-  background-image: url(${metafyDataUri});
-  background-size: 150%;
-  background-repeat: repeat;
-  opacity: calc(0.12 * var(--oc-card-opacity));
-  mix-blend-mode: soft-light;
-  pointer-events: none;
-}
+/* Model-viewer wrapper — no CSS overlay, effects via Materials API */
+.oc-mv-holo-wrap { position: relative; width: 100%; height: 100%; }
 `;
 }
 
@@ -486,12 +432,7 @@ export function getHoloOverlayCSS() {
  */
 export function getHoloOverlayHTML(instanceId) {
   return `
-<div class="oc-mv-holo-wrap" id="oc-mv-wrap-${instanceId}">
-  <div class="oc-mv-overlay">
-    <div class="oc-mv-glare"></div>
-    <div class="oc-mv-grain"></div>
-    <div class="oc-mv-metafy"></div>
-  </div>`;
+<div class="oc-mv-holo-wrap" id="oc-mv-wrap-${instanceId}">`;
 }
 
 /**
@@ -507,48 +448,6 @@ export function getHoloOverlayHTMLClose() {
  * No tilt transform — model-viewer handles 3D rotation.
  * @param {string} instanceId — matches the IDs in getHoloOverlayHTML
  */
-export function getHoloOverlayJS(instanceId) {
-  return `
-// ── OOCard Model-Viewer Holo overlay tracking: ${instanceId} ──
-(function() {
-  var wrap = document.getElementById('oc-mv-wrap-${instanceId}');
-  if (!wrap) return;
-
-  function ocRound(v, p) { p = p || 3; return parseFloat(v.toFixed(p)); }
-  function ocClamp(v, mn, mx) { return Math.min(Math.max(v, mn), mx); }
-  function ocAdjust(v, fMin, fMax, tMin, tMax) {
-    return ocRound(tMin + (tMax - tMin) * (v - fMin) / (fMax - fMin));
-  }
-
-  function overlayUpdate(e) {
-    var rect = wrap.getBoundingClientRect();
-    var l = e.clientX - rect.left;
-    var t = e.clientY - rect.top;
-    var w = rect.width, h = rect.height;
-    var px = ocClamp(100 / w * l, 0, 100);
-    var py = ocClamp(100 / h * t, 0, 100);
-    var cx = px - 50, cy = py - 50;
-
-    wrap.style.setProperty('--oc-pointer-x', px + '%');
-    wrap.style.setProperty('--oc-pointer-y', py + '%');
-    wrap.style.setProperty('--oc-background-x', ocAdjust(px, 0, 100, 47, 53) + '%');
-    wrap.style.setProperty('--oc-background-y', ocAdjust(py, 0, 100, 47, 53) + '%');
-    wrap.style.setProperty('--oc-pointer-from-center', ocClamp(Math.sqrt(cy*cy + cx*cx) / 50, 0, 1));
-    wrap.style.setProperty('--oc-pointer-from-top', py / 100);
-    wrap.style.setProperty('--oc-pointer-from-left', px / 100);
-    wrap.style.setProperty('--oc-card-opacity', '1');
-  }
-
-  wrap.addEventListener('pointerenter', function() {
-    wrap.classList.add('oc-active');
-  });
-
-  wrap.addEventListener('pointermove', overlayUpdate);
-
-  wrap.addEventListener('pointerleave', function() {
-    wrap.classList.remove('oc-active');
-    wrap.style.setProperty('--oc-card-opacity', '0');
-  });
-})();
-`;
+export function getHoloOverlayJS(_instanceId) {
+  return ''; // No overlay JS needed — hologram effect applied via Materials API
 }
